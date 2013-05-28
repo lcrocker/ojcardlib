@@ -148,18 +148,19 @@ int ojc_next(oj_combiner_t *comb) {
         comb->flags |= OJF_VALIDRANK;
     }
     if (comb->remaining != comb->total) {
-        for (i = 0; i < k; ++i) {
-            if ( ((i < k - 1) && (a[i] < (a[i + 1] - 1))) ||
-                  ((i == k - 1) && (a[i] < n - 1)) ) {
-                ++a[i];
-                for (j = 0; j < i; ++j) a[j] = j;
-            }
+        for (i = 0; i < k-1; ++i) {
+            if (a[i] < a[i+1] - 1) break;
         }
+        assert(! ((i == k-1) && (a[i] == n-1)));
+
+        ++a[i];
+        for (j = 0; j < i; ++j) a[j] = j;
+
         ++comb->rank;
         comb->flags &= ~OJF_VALIDMAP;
     }
-    for (i = 0; i < k; ++i) {
-        comb->hand->cards[i] = comb->deck->cards[a[i]];
+    for (int c = 0; c < k; ++c) {
+        comb->hand->cards[c] = comb->deck->cards[a[c]];
     }
     --comb->remaining;
     comb->hand->eflags = 0;

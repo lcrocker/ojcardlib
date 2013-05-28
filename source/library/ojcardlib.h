@@ -215,6 +215,7 @@ extern int ojc_colex_hand_at(long long rank, oj_cardlist_t *hand,
 
 /* poker.c */
 extern int ojp_eval5(oj_cardlist_t *sp);
+extern int ojp_eval7(oj_cardlist_t *sp);
 extern int ojp_best5(oj_cardlist_t *sp, oj_cardlist_t *bh);
 extern int ojp_hand_info(oj_poker_hand_info_t *ip, oj_cardlist_t *sp, int val);
 extern char *ojp_hand_description(oj_poker_hand_info_t *pi);

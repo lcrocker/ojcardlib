@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "ojcardlib.h"
 
@@ -16,8 +17,6 @@ int main(int argc, char *argv[]) {
     int i, db[52], hb[5];
     char text[20];
     oj_cardlist_t deck, hand;
-
-    printf("%d %d\n", sizeof(oj_cardlist_t), sizeof(oj_combiner_t));
 
     ojl_new(&deck, db, 52);
     ojl_fill(&deck, 52, OJD_STANDARD);

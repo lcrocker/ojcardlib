@@ -16,13 +16,121 @@
 #include "ldctables.h"
 
 /* The magic here is in building the lookup tables. See pokertables.py in the
- * python directory. Call this when yoou know the hand is exactly five cards
+ * python directory. Call this when you know the hand is exactly five cards
  * and you want the value quickly.
  */
 int ojp_eval5(oj_cardlist_t *sp) {
     return ldc4[ ldc3[ ldc2[ ldc1[
         52 * (sp->cards[0] - 1) + sp->cards[1] ]
            + sp->cards[2] ] + sp->cards[3] ] + sp->cards[4] ];
+}
+
+// On my machine, branchless MINs are actually a bit slower
+// than the straightforward one.
+#define MIN(x,y) (((x)<(y)) ? (x) : (y))
+
+/* 7 cards is common enough to deserve special case code.
+ * Unlike best5(), this won't return the actual hand.
+ */
+int ojp_eval7(oj_cardlist_t *sp) {
+    int *h = sp->cards;
+    int b0 = 52 * (h[0] - 1);
+    int b1 = ldc1[ b0 + h[1] ];
+    int b2 = ldc2[ b1 + h[2] ];
+    int b3 = ldc3[ b2 + h[3] ];
+    int best = ldc4[ b3 + h[4] ];   // 1
+
+    int b4 = ldc4[ b3 + h[5] ];
+    best = MIN(best, b4);           // 2
+
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 3
+
+    b3 = ldc3[ b2 + h[4] ];
+    b4 = ldc4[ b3 + h[5] ];
+    best = MIN(best, b4);           // 4
+
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 5
+
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 6
+
+    b2 = ldc2[ b1 + h[3] ];
+    b3 = ldc3[ b2 + h[4] ];
+    b4 = ldc4[ b3 + h[5] ];
+    best = MIN(best, b4);           // 7
+
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 8
+
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 9
+
+    b2 = ldc2[ b1 + h[4] ];
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 10
+
+    b1 = ldc1[ b0 + h[2] ];
+    b2 = ldc2[ b1 + h[3] ];
+    b3 = ldc3[ b2 + h[4] ];
+    b4 = ldc4[ b3 + h[5] ];
+    best = MIN(best, b4);           // 11
+
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 12
+
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 13
+
+    b2 = ldc2[ b1 + h[4] ];
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 14
+
+    b1 = ldc1[ b0 + h[3] ];
+    b2 = ldc2[ b1 + h[4] ];
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 15
+
+    b0 = 52 * (h[1] - 1);
+    b1 = ldc1[ b0 + h[2] ];
+    b2 = ldc2[ b1 + h[3] ];
+    b3 = ldc3[ b2 + h[4] ];
+    b4 = ldc4[ b3 + h[5] ];
+    best = MIN(best, b4);           // 16
+
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 17
+
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 18
+
+    b2 = ldc2[ b1 + h[4] ];
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 19
+
+    b1 = ldc1[ b0 + h[3] ];
+    b2 = ldc2[ b1 + h[4] ];
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 20
+
+    b0 = 52 * (h[2] - 1);
+    b1 = ldc1[ b0 + h[3] ];
+    b2 = ldc2[ b1 + h[4] ];
+    b3 = ldc3[ b2 + h[5] ];
+    b4 = ldc4[ b3 + h[6] ];
+    best = MIN(best, b4);           // 21
+
+    return best;
 }
 
 static oj_combiner_t piter;
@@ -32,7 +140,7 @@ static int hbuf[8];
 /* Given a sequence of any length, find the best 5-card hand and its value.
  */
 int ojp_best5(oj_cardlist_t *sp, oj_cardlist_t *bh) {
-    int v, best;
+    int v, best, i;
     assert(0 != sp && sp->length >= 5);
     assert(0 != bh && bh->allocation >= 5 && (!(bh->pflags & OJF_RDONLY)));
 
@@ -44,11 +152,12 @@ int ojp_best5(oj_cardlist_t *sp, oj_cardlist_t *bh) {
     ojc_new(&piter, sp, &phand, 5, 0LL);
 
     best = 9999;
-    while (ojc_next(&piter)) {
+    while ((i = ojc_next(&piter))) {
         v = ojp_eval5(piter.hand);
         if (v < best) {
             best = v;
             ojl_copy(bh, piter.hand);
+
         }
     }
     return best;
