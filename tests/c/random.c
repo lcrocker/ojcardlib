@@ -16,13 +16,54 @@
 #include <math.h>
 
 #include "ojcardlib.h"
-#include "stats.h"
+
+struct buckets {
+    double mean, stddev, maxz;
+    long n, count;
+    long buckets[1];
+};
+
+static struct buckets *create_buckets(int n) {
+    struct buckets *bp;
+    int i;
+
+    bp = malloc(((n - 1) * sizeof(long)) + sizeof(struct buckets));
+    bp->mean = bp->stddev = bp->maxz = 0.0;
+    bp->count = 0L;
+    bp->n = n;
+    for (i = 0; i < n; ++i) { bp->buckets[i] = 0L; }
+    return bp;
+}
+static void free_buckets(struct buckets *bp) { free(bp); }
+
+static int add_value(struct buckets *bp, int v) {
+    ++bp->count;
+    ++bp->buckets[v % bp->n];
+    return 0;
+}
+
+static void calculate_stats(struct buckets *bp) {
+    int i;
+    double d, z, t = 0.0;
+    bp->mean = (double)(bp->count) / (double)(bp->n);
+
+    for (i = 0; i < bp->n; ++i) {
+        d = (double)(bp->buckets[i]) - bp->mean;
+        t += d * d;
+    }
+    bp->stddev = sqrt( t / (double)(bp->n - 1) );
+    bp->maxz = 0.0;
+    for (i = 0; i < bp->n; ++i) {
+        z = fabs(((double)(bp->buckets[i]) - bp->mean) / bp->stddev);
+        if (z > bp->maxz) bp->maxz = z;
+    }
+}
 
 /* Quickly verify that giving a non-zero seed gives us a repeatable sequence,
  * and that a zero seed doesn't.
  */
 
-int allequal(int *a, int *b, int n) {
+int allequal(uint32_t *a, uint32_t *b, int n) {
     int i;
     for (i = 0; i < n; ++i) { if (a[i] != b[i]) return 0; }
     return 1;

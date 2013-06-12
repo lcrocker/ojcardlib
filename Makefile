@@ -26,18 +26,19 @@ JAVACFLAGS = -g -Werror
 JPACKAGE = $(subst /,.,$(CLASSDIR))
 
 LIBNAME = libojcard.so
-CNAMES = init blackjack cardlist combiner deckinfo poker prng text
+CNAMES = init deckinfo text prng cardlist combiner blackjack poker
 PYNAMES = __init__ core text cardlist combiner
 JNAMES = Card CardList DeckType
-TESTNAMES = hello hello.py Hello.class
+TESTNAMES = basic hello cardlist combiner
+# random hello.py Hello.class
 
 LIBOBJECTS = $(patsubst %,$(BLDDIR)/%.o,$(CNAMES))
 # LIBOBJECTS += $(BLDDIR)/wrapper.o
-LIBOBJECTS += $(patsubst %,$(BLDDIR)/jni%.o,$(JNAMES))
+# LIBOBJECTS += $(patsubst %,$(BLDDIR)/jni%.o,$(JNAMES))
 PYFILES = $(patsubst %,$(BLDDIR)/$(MODDIR)/%.py,$(PYNAMES))
 JCLASSES = $(patsubst %,$(BLDDIR)/$(CLASSDIR)/%.class,$(JNAMES))
 JHEADERS = $(patsubst %,$(BLDDIR)/com_onejoker_cardlib_%.h,$(JNAMES))
-TESTPROGS = $(patsubst %,$(BLDDIR)/%,$(TESTNAMES))
+TESTPROGS = $(patsubst %,$(BLDDIR)/t_%,$(TESTNAMES))
 
 .PHONY: all lib test clean python java
 
@@ -50,9 +51,11 @@ python: $(PYFILES)
 java: $(JCLASSES) $(JHEADERS)
 
 test: $(TESTPROGS)
-	cd $(BLDDIR) && ./hello
-	cd $(BLDDIR) && python3 ./hello.py
-	cd $(BLDDIR) && java -ea -cp "." -Djava.library.path="." Hello
+	cd $(BLDDIR) && ./t_basic
+	cd $(BLDDIR) && ./t_cardlist
+	cd $(BLDDIR) && ./t_combiner
+	# cd $(BLDDIR) && python3 ./hello.py
+	# cd $(BLDDIR) && java -ea -cp "." -Djava.library.path="." Hello
 
 clean:
 	rm -rf $(BLDDIR)/*
@@ -75,26 +78,29 @@ $(BLDDIR)/jni%.o: $(SRCDIR)/java/$(CLASSDIR)/jni%.c $(SRCDIR)/java/com_onejoker_
 $(BLDDIR)/%.o: $(SRCDIR)/library/%.c $(SRCDIR)/library/ojcardlib.h | $(BLDDIR)
 	$(CC) $(CFLAGS) -c -I$(SRCDIR)/library -o $@ $<
 
+$(BLDDIR)/$(CLASSDIR)/%.class: $(SRCDIR)/java/$(CLASSDIR)/%.java | $(BLDDIR)/$(CLASSDIR)
+	javac $(JAVACFLAGS) -cp $(SRCDIR)/java -d $(BLDDIR) $<
+
+$(BLDDIR)/com_onejoker_cardlib_%.h: $(BLDDIR)/$(CLASSDIR)/%.class
+	cd $(BLDDIR) && javah -jni -force $(JPACKAGE).$*
+
 $(BLDDIR)/$(MODDIR)/%.py: $(SRCDIR)/python/$(MODDIR)/%.py | $(BLDDIR)/$(MODDIR)
 	cp $< $@
 
 $(BLDDIR)/$(LIBNAME): $(LIBOBJECTS)
 	$(LD) $(LDFLAGS) -shared -o $@ $^ $(SYSTEMLIBS)
 
-$(BLDDIR)/hello: $(TESTDIR)/c/hello.c $(BLDDIR)/$(LIBNAME)
-	$(CC) $(CFLAGS) -L$(BLDDIR) -I$(SRCDIR)/library -o $@ $< -lojcard
-
 #$(BLDDIR)/cpphello: $(TESTDIR)/cpp/hello.cc $(BLDDIR)/$(LIBNAME)
 #	$(CXX) $(CXXFLAGS) -L$(BLDDIR) -I$(SRCDIR)/library -o $@ $< -lm -lojcard
 
+$(BLDDIR)/t_combiner: $(TESTDIR)/c/combiner.c $(TESTDIR)/c/stats.c $(BLDDIR)/$(LIBNAME)
+	$(CC) $(CFLAGS) -L$(BLDDIR) -I$(TESTDIR)/c -I$(SRCDIR)/library -o $@ $^ -lojcard -lm
+
+$(BLDDIR)/t_%: $(TESTDIR)/c/%.c $(BLDDIR)/$(LIBNAME)
+	$(CC) $(CFLAGS) -L$(BLDDIR) -I$(SRCDIR)/library -o $@ $< -lojcard
+
 $(BLDDIR)/hello.py: $(TESTDIR)/python/hello.py python
 	cp $< $@
-
-$(BLDDIR)/$(CLASSDIR)/%.class: $(SRCDIR)/java/$(CLASSDIR)/%.java | $(BLDDIR)/$(CLASSDIR)
-	javac $(JAVACFLAGS) -cp $(SRCDIR)/java -d $(BLDDIR) $<
-
-$(BLDDIR)/com_onejoker_cardlib_%.h: $(BLDDIR)/$(CLASSDIR)/%.class
-	cd $(BLDDIR) && javah -jni -force $(JPACKAGE).$*
 
 $(BLDDIR)/Hello.class: $(TESTDIR)/java/Hello.java | $(BLDDIR)
 	javac $(JAVACFLAGS) -cp $(BLDDIR) -d $(BLDDIR) $<

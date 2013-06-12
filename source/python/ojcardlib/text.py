@@ -9,7 +9,7 @@ from ctypes import *
 from ctypes.util import find_library
 
 ojlib = CDLL(find_library("ojcard"))
-ojlib.ojt_card.restype = c_char_p
+ojlib.ojt_name.restype = c_char_p
 ojlib.ojt_rank.restype = c_char_p
 ojlib.ojt_suit.restype = c_char_p
 
@@ -25,7 +25,7 @@ _cnamepattern = re.compile("""
         )
     )""", re.IGNORECASE | re.VERBOSE)
 
-_cardnames = [ (ojlib.ojt_card(c).decode()) for c in range(1, 54) ]
+_cardnames = [ (ojlib.ojt_name(c).decode()) for c in range(1, 54) ]
 _ranknames = [ (ojlib.ojt_rank(r).decode()) for r in range(14) ]
 _suitnames = [ (ojlib.ojt_suit(s).decode()) for s in range(4) ]
 

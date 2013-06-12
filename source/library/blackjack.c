@@ -14,25 +14,24 @@
 
 #include "ojcardlib.h"
 
-__attribute__((hot))
-int ojb_total(const oj_cardlist_t * const sp) {
-    int i, c, t = 0, ace = 0, soft = 0;
-    assert(0x10ACE0FF == sp->_johnnymoss);
+int ojb_total(oj_cardlist *p) {
+    int total = 0, ace = 0, soft = 0;
+    assert(0x10ACE0FF == p->_johnnymoss);
 
-    for (i = 0; i < sp->length; ++i) {
-        c = sp->cards[i];
+    for (int i = 0; i < p->length; ++i) {
+        int c = p->cards[i];
         if (c >= OJ_CARD(OJR_ACE, OJS_CLUB)) {
             ace = 1;
-            ++t;
+            total += 1;
         } else if (c >= OJ_CARD(OJR_TEN, OJS_CLUB)) {
-            t += 10;
+            total += 10;
         } else {
-            t += OJ_RANK(c) + 2;
+            total += OJ_RANK(c) + 2;
         }
     }
-    if (ace && t < 12) {
-        t += 10;
+    if (ace && total < 12) {
+        total += 10;
         soft = 1;
     }
-    return soft ? -t : t;
+    return soft ? -total : total;
 }

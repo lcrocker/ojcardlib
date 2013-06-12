@@ -23,9 +23,8 @@ static char *_cardnames[] = {
     "Ac","Ad","Ah","As", "JK","JR"
 };
 
-/* Return standard 2-character representation of card value.
- */
-char *ojt_card(int c) {
+// Standard 2-character representation of card value.
+char *ojt_card(oj_card c) {
     assert(c > 0 && c < 55);
     return _cardnames[c - 1];
 }
@@ -35,9 +34,8 @@ static char *_ranknames[] = {
     "nine", "ten", "jack", "queen", "king", "ace", "joker"
 };
 
-/* Full name of rank value (e.g. "queen")
- */
-char *ojt_rank(int r) {
+// Full name of rank value (e.g. "queen")
+char *ojt_rank(oj_rank r) {
     assert(r >= 0 && r <= 13);
     return _ranknames[r];
 }
@@ -46,17 +44,14 @@ static char *_suitnames[] = {
     "club", "diamond", "heart", "spade"
 };
 
-/* Full singular name of suit value (e.g. "spade")
- */
-char *ojt_suit(int s) {
+// Full singular name of suit value (e.g. "spade")
+char *ojt_suit(oj_suit s) {
     assert(s >= 0 && s <= 3);
     return _suitnames[s];
 }
 
-/* Put full name of card (e.g. "ten of clubs") into given buffer,
- * returning the buffer.
- */
-char *ojt_fullname(int c, char *buf, int size) {
+// Put full name of card (e.g. "ten of clubs") into given buffer, returning the buffer.
+char *ojt_fullname(oj_card c, char *buf, int size) {
     assert(c > 0 && c < 55);
     assert(0 != buf && 0 != size);
 
@@ -72,10 +67,9 @@ char *ojt_fullname(int c, char *buf, int size) {
     return buf;
 }
 
-/* Parse the passed-in string for a card name, returning its
- * value and a pointer to the following character.
- */
-static int _parse_card(char *str, char **next) {
+// Parse the passed-in string for a card name, returning its
+// value and a pointer to the following character.
+static oj_card _parse_card(char *str, char **next) {
     char *cp = str, c;
     int r, s;
     assert(0 != cp);
@@ -128,16 +122,14 @@ static int _parse_card(char *str, char **next) {
     return OJ_CARD(r, s);
 }
 
-/* Parse a single card value
- */
-int ojt_val(char *str) {
+// Parse a single card value
+oj_card ojt_val(char *str) {
     char *next;
     return _parse_card(str, &next);
 }
 
-/* Fill an int array with all the cards found, returning the count
- */
-int ojt_vals(char *str, int *arr, int size) {
+// Fill an int array with all the cards found, returning the count
+int ojt_vals(char *str, oj_card *arr, int size) {
     int v, i = 0;
     char *next;
     assert(0 != str && 0 != arr && 0 != size);

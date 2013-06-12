@@ -23,27 +23,20 @@
 
 #include "ojcardlib.h"
 
-/* TODO: at some point, make this into an independent library
- * with more complete features, like keeping state in a structure
- * to allow for multiple streams, keeping the system seeds for
- * reuse, multiple algorithms, etc.
- */
-
-/* Seed variables */
-static uint32_t x, y, z, c;
+// Seed variables
+static uint64_t x, y;
+static uint32_t z1, c1, z2, c2;
 static int _seeded = 0;
 
-/* Ring buffer for random bits. We calculate a bufferfull of random bits
- * at a time, and fetch them from the buffer, refilling when needed.
- */
+// Ring buffer for random bits. We calculate a bufferfull of random bits
+// at a time, and fetch them from the buffer, refilling when needed.
 #define RB_SIZE 2048
 static uint16_t *rptr, ring[RB_SIZE / 2];
 
-/* Seed the PRNG. If we are passed 0, generate a good seed from system
- * entropy. Otherwise, give a reproducible sequence.
- */
+// Seed the PRNG. If we are passed 0, generate a good seed from system
+// entropy. Otherwise, give a reproducible sequence.
 int ojr_seed(int seed) {
-    uint32_t s[4];
+    uint32_t s[8];
     time_t t;
 #ifdef _WIN32
     HCRYPTPROV hCryptProv;
@@ -51,27 +44,27 @@ int ojr_seed(int seed) {
     int fn;
 #endif
 
-    /* Make sure we reload on first call */
+    // Make sure we reload on first call
     rptr = ring;
 
-    /* Start with some reasonable defaults */
-    x = 123456789;
-    y = 987654321;
-    z = 43219876;
-    c = 6543217;
+    // Start with some reasonable defaults
+    x = 123456789123ull;
+    y = 987654321987ull;
+    z1 = 43219876;
+    c1 = 6543217;
+    z2 = 21987643;
+    c2 = 1732654;
     _seeded = 0;
 
-    /* If we were passed a nonzero seed, mix those bits in with the
-     * defaults to get a repeatable sequence.
-     */
+    // If we were passed a nonzero seed, mix those bits in with the
+    // defaults to get a repeatable sequence.
     if (0 != seed) {
         x ^= (0x5A5A5A5A & seed);
-        z ^= (0xA5A5A5A5 & seed);
+        y ^= (0xA5A5A5A5 & seed);
         _seeded = 1;
         return 0;
     }
-    /* Fetch seed from system entropy.
-     */
+    // Fetch seed from system entropy.
 #ifdef _WIN32
     do {
         if (! CryptAcquireContext(&hCryptProv, "LDC",
@@ -81,56 +74,62 @@ int ojr_seed(int seed) {
                 break;
             }
         }
-        if (CryptGenRandom(hCryptProv, 16, (BYTE *)s)) _seeded = 1;
+        if (CryptGenRandom(hCryptProv, 32, (BYTE *)s)) _seeded = 1;
         CryptReleaseContext(hCryptProv, 0);
     } while (0);
 #else
     fn = open("/dev/urandom", O_RDONLY);
     if (-1 != fn) {
-        if (16 == read(fn, s, 16)) _seeded = 1;
+        if (32 == read(fn, s, 32)) _seeded = 1;
         close(fn);
     }
 #endif
     if (_seeded) {
-        x = s[0];
-        if (0 != s[1]) y = s[1];
-        z = s[2];
-        c = s[3] % 698769068 + 1;
+        x = *(uint64_t *)s;
+        y = *(uint64_t *)(s + 2);
+        if (0ull == y) y = 987654321987ull;
+
+        z1 = s[4];
+        c1 = s[5] | (1 << 28);
+        z2 = s[6];
+        c2 = s[7] | (1 << 29);
         return 0;
     }
-    /* Fall back to using time()
-     */
+    // Fall back to using time()
     time(&t);
     x ^= (0xA5A5A5A5 & t);
-    z ^= (0x5A5A5A5A & t);
+    y ^= (0x5A5A5A5A & t);
     _seeded = 1;
     return 0;
 }
 
-/* Need more random bits.
- */
-__attribute__((hot))
+// Need more random bits.
 static void reload(void) {
     int i;
     uint64_t t;
 
     assert(_seeded);
-    for (i = 0; i < (RB_SIZE / 4); ++i) {
-        x = 314527869 * x + 1234567;
-        y ^= y << 5;
-        y ^= y >> 7;
-        y ^= y << 22;
-        t = 4294584393ull * z + c;
-        c = t >> 32;
-        z = t;
-        ((uint32_t *)ring)[i] = x + y + z;
+    for (i = 0; i < (RB_SIZE / 8); ++i) {
+        x = 1490024343005336237ull * x + 123456789;
+
+        y ^= y << 21;
+        y ^= y >> 17;
+        y ^= y << 30;
+
+        t = 4294584393ull * z1 + c1;
+        c1 = t >> 32;
+        z1 = t;
+
+        t = 4246477509ull * z2 + c2;
+        c2 = t >> 32;
+        z2 = t;
+
+        ((uint64_t *)ring)[i] = x + y + z1 + ((uint64_t)z2 << 32);
     }
     rptr = ring + (RB_SIZE / 2);
 }
 
-/* Return next 16 random bits from buffer.
- */
-__attribute__((hot))
+// Return next 16, 32, 64 random bits from buffer.
 uint16_t ojr_next16(void) {
     assert(_seeded);
     if (rptr == ring) reload();
@@ -151,9 +150,8 @@ uint64_t ojr_next64(void) {
     return *((uint64_t *)rptr);
 }
 
-/* For those of you into floating point, return one in [0,1).
- * Assumes ieee-64 floating point format.
- */
+// For those of you into floating point, return one in [0,1).
+// Assumes ieee-64 floating point format.
 static union {
     double d;
     uint64_t i;
@@ -165,11 +163,8 @@ double ojr_next_double(void) {
     return ieee.d - 1.0;
 }
 
-/* Return a well-balanced random integer from 0 to limit-1.
- * Limited to 16 bits!
- */
-__attribute__((hot))
-int ojr_rand(const int limit) {
+// Return a well-balanced random integer from 0 to limit-1. Limited to 16 bits!
+int ojr_rand(int limit) {
     int v, m = limit - 1;
     assert(_seeded);
     assert(limit > 0);
@@ -181,25 +176,9 @@ int ojr_rand(const int limit) {
     m |= m >> 8;
 
     do {
-        v = ojr_next16() & m;
+        if (rptr == ring) reload();
+        v = m & *--rptr;
     } while (v >= limit);
     return v;
 }
 
-#define SWAP(a,b) do{t=array[a];array[a]=array[b];array[b]=t;}while(0)
-
-/* Move to the top of the array a randomly-chosen combination of <count>
- * elements, where each combination and permutation is equally likely.
- * If <count> == <size>, this becomes a standard Fisher-Yates shuffle.
- */
-void ojr_shuffle(int *array, int size, int count) {
-    int i, r, t;
-
-    if (size < 2) return;
-    if (count == size) --count;
-
-    for (i = 0; i < count; ++i) {
-        r = ojr_rand(size - i);
-        if (i != i + r) SWAP(i, i + r);
-    }
-}

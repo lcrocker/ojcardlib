@@ -47,183 +47,273 @@ static long long _masks[] = { 0LL,
 #define M(c) (_masks[c])
 */
 #define M(c) (1LL<<(c))
-
 #define ISSET(m,c) (0LL != ((m) & M(c)))
 #define SET(m,c) ((m) |= M(c))
 #define CLEAR(m,c) ((m) &= ~M(c))
 
-/* Initialize an empty list object with the given buffer.
-*/
-int ojl_new(oj_cardlist_t *sp, int *buf, int size) {
-    assert(0 != sp && 0 != size && 0 != buf);
-
-    memset(sp, 0, sizeof(oj_cardlist_t));
-    sp->_johnnymoss = 0x10ACE0FF;
-    sp->allocation = size;
-    sp->cards = buf;
-    return size;
-}
-
-/* Build a 64-bit mask value for the give cardlist. Return the number of
- * duplicates found.
- */
-int ojl_build_mask(oj_cardlist_t *sp, uint64_t *mp) {
+// Build a 64-bit mask value for the give cardlist. Return the number of duplicates found.
+static int _build_mask(oj_cardlist *p, uint64_t *mp) {
     int i, dups = 0;
-    assert(0 != mp && 0 != sp && 0x10ACE0FF == sp->_johnnymoss);
+    assert(0 != p && 0 != mp && 0x10ACE0FF == p->_johnnymoss);
 
     *mp = 0LL;
-    for (i = 0; i < sp->length; ++i) {
-        if (ISSET(*mp, sp->cards[i])) ++dups;
-        SET(*mp, sp->cards[i]);
+    for (i = 0; i < p->length; ++i) {
+        if (ISSET(*mp, p->cards[i])) ++dups;
+        SET(*mp, p->cards[i]);
     }
     return dups;
 }
 
-/* Remove all cards.
- */
-int ojl_clear(oj_cardlist_t *sp) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+// Initialize an empty list object with the given buffer.
+int ojl_new(oj_cardlist *p, oj_card *buf, int size) {
+    assert(0 != p && 0 != size && 0 != buf);
 
-    sp->length = sp->eflags = 0;
-    sp->mask = 0LL;
+    memset(p, 0, sizeof(oj_cardlist));
+    p->_johnnymoss = 0x10ACE0FF;
+    p->allocation = size;
+    p->cards = buf;
+    return size;
+}
+
+// Read flags
+int ojl_pflag(oj_cardlist *p, int mask) { return p->pflags & mask; }
+int ojl_eflag(oj_cardlist *p, int mask) { return p->eflags & mask; }
+
+// Set flags
+int ojl_set_pflag(oj_cardlist *p, int mask) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if ((p->pflags & OJF_RDONLY) && (OJF_RDONLY != mask)) ER(OJE_RDONLY);
+
+    p->pflags |= mask;
     return 0;
 }
 
-/* Python doesn't have this one, but it's handy for our uses. Remove all but
- * first <size> cards.
- */
-int ojl_truncate(oj_cardlist_t *sp, int size) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+int ojl_set_eflag(oj_cardlist *p, int mask) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
 
-    if (size > sp->length) ER(OJE_BADINDEX);
-    if (size == sp->length) return 0;
-
-    sp->length = size;
-    sp->eflags = 0;
-    if (sp->pflags & OJF_UNIQUE) ojl_build_mask(sp, &sp->mask);
+    p->eflags |= mask;
     return 0;
 }
 
-int ojl_size(oj_cardlist_t *sp) { return sp->length; }
+// Clear flags
+int ojl_clear_pflag(oj_cardlist *p, int mask) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if ((p->pflags & OJF_RDONLY) && (OJF_RDONLY != mask)) ER(OJE_RDONLY);
 
-/* These get/put functions pay attention to flags and error checking.
- * Accessing the cards array directly can be used for performance if that
- * isn't needed. Language bindings should use these as well.
- */
-int ojl_get(oj_cardlist_t *sp, int index) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (index >= sp->length) ER(OJE_BADINDEX);
-    return sp->cards[index];
+    p->pflags &= (~mask);
+    return 0;
+}
+int ojl_clear_eflag(oj_cardlist *p, int mask) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+
+    p->eflags &= (~mask);
+    return 0;
 }
 
-int ojl_set(oj_cardlist_t *sp, int index, int card) {
-    int oc;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    if (index >= sp->length) ER(OJE_BADINDEX);
+// Basic get and set. There are macro versions of these for maximum speed,
+// but these do better error checking.
+oj_card ojl_get(oj_cardlist *p, int index) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (index >= p->length) ER(OJE_BADINDEX);
+    return p->cards[index];
+}
 
-    oc = sp->cards[index];
+oj_card ojl_set(oj_cardlist *p, int index, oj_card card) {
+    oj_card oc;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (index >= p->length) ER(OJE_BADINDEX);
+
+    oc = p->cards[index];
     if (oc == card) return oc;
 
-    if (sp->pflags & OJF_UNIQUE) {
-        if (ISSET(sp->mask, card)) ER(OJE_DUPLICATE);
-        CLEAR(sp->mask, oc);
-        SET(sp->mask, card);
+    if (p->pflags & OJF_UNIQUE) {
+        if (ISSET(p->mask, card)) ER(OJE_DUPLICATE);
+        CLEAR(p->mask, oc);
+        SET(p->mask, card);
     }
-    sp->cards[index] = card;
-    sp->eflags = 0;
+    p->cards[index] = card;
+    p->eflags = 0;
     return oc;
 }
 
-/* Read, set, and clear flags. If a list is read only, you can only change
- * the read-only flag.
- */
-int ojl_pflag(oj_cardlist_t *sp, int mask) { return sp->pflags & mask; }
-int ojl_eflag(oj_cardlist_t *sp, int mask) { return sp->eflags & mask; }
+// Remove all cards.
+int ojl_clear(oj_cardlist *p) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
 
-int ojl_set_pflag(oj_cardlist_t *sp, int mask) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if ((sp->pflags & OJF_RDONLY) && (OJF_RDONLY != mask)) ER(OJE_RDONLY);
-
-    sp->pflags |= mask;
+    p->length = p->eflags = 0;
+    p->mask = 0LL;
     return 0;
 }
 
-int ojl_clear_pflag(oj_cardlist_t *sp, int mask) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if ((sp->pflags & OJF_RDONLY) && (OJF_RDONLY != mask)) ER(OJE_RDONLY);
+// Remove all but first <size> cards.
+int ojl_truncate(oj_cardlist *p, int size) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
 
-    sp->pflags &= (~mask);
+    if (size > p->length) ER(OJE_BADINDEX);
+    if (size == p->length) return 0;
+
+    p->length = size;
+    p->eflags = 0;
+    if (p->pflags & OJF_UNIQUE) _build_mask(p, &p->mask);
     return 0;
 }
 
-int ojl_set_eflag(oj_cardlist_t *sp, int mask) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+int ojl_size(oj_cardlist *p) { return p->length; }
 
-    sp->eflags |= mask;
-    return 0;
+int ojl_equal(oj_cardlist *p1, oj_cardlist *p2) {
+    assert(0 != p1 && 0x10ACE0FF == p1->_johnnymoss);
+    assert(0 != p2 && 0x10ACE0FF == p2->_johnnymoss);
+
+    int f1 = p1->pflags & OJF_UNIQUE;
+    int f2 = p2->pflags & OJF_UNIQUE;
+
+    if (f1 != f2) return 0;
+    if (f1 && f2) return p1->mask == p2->mask;
+    if (p1->length != p2->length) return 0;
+
+    for (int i = 0; i < p1->length; ++i) {
+        if (p1->cards[i] != p2->cards[i]) return 0;
+    }
+    return 1;
 }
 
-int ojl_clear_eflag(oj_cardlist_t *sp, int mask) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-
-    sp->eflags &= (~mask);
-    return 0;
-}
-
-/* User data pointer can be used to store whatever an application needs it for.
- */
-void *ojl_get_extra(oj_cardlist_t *sp) { return sp->extra; }
-void ojl_set_extra(oj_cardlist_t *sp, void *udp) { sp->extra = udp; }
-
-/* Fowler / Noll / Vo 1a: <http://www.isthe.com/chongo/tech/comp/fnv/>
- * Like ojl_equal(), this functions differs for non-duplicate lists.
- */
-uint32_t ojl_hash(oj_cardlist_t *sp) {
+// Fowler / Noll / Vo 1a: <http://www.isthe.com/chongo/tech/comp/fnv/>
+uint32_t ojl_hash(oj_cardlist *p) {
     int i;
     char *cp;
     uint32_t h = 2166136261U;
 
-    if (sp->pflags & OJF_UNIQUE) {
-        cp = (char *)(& sp->mask);
+    if (p->pflags & OJF_UNIQUE) {
+        cp = (char *)(& p->mask);
         for (i = 0; i < 7; ++i) {
             h ^= *cp++;
             h *= 16777619;
         }
     } else {
-        for (i = 0; i < sp->length; ++i) {
-            h ^= sp->cards[i];
+        for (i = 0; i < p->length; ++i) {
+            h ^= p->cards[i];
             h *= 16777619;
         }
     }
     return h;
 }
 
-__attribute__((hot))
-int ojl_append(oj_cardlist_t *sp, int card) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
+// Add a card to the end of list
+oj_card ojl_append(oj_cardlist *p, oj_card card) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
     assert(card > 0 && card <= 54);
 
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    if (sp->length == sp->allocation) ER(OJE_FULL);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (p->length == p->allocation) ER(OJE_FULL);
 
-    if (sp->pflags & OJF_UNIQUE) {
-        if (ISSET(sp->mask, card)) ER(OJE_DUPLICATE);
-        SET(sp->mask, card);
+    if (p->pflags & OJF_UNIQUE) {
+        if (ISSET(p->mask, card)) ER(OJE_DUPLICATE);
+        SET(p->mask, card);
     }
-    sp->cards[sp->length++] = card;
-    sp->eflags = 0;
+    p->cards[p->length++] = card;
+    p->eflags = 0;
     return card;
 }
 
-/* Add cards from one list to the end of another.
- */
-int ojl_extend(oj_cardlist_t *destp, oj_cardlist_t *srcp, int count) {
-    int i, c, r;
+// Remove and return card at end of list.
+oj_card ojl_pop(oj_cardlist *p) {
+    int s;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (0 == p->length) ER(OJE_BADINDEX);
+    s = --p->length;
+
+    if (p->pflags & OJF_UNIQUE) CLEAR(p->mask, p->cards[s]);
+    p->eflags = 0;
+    return p->cards[s];
+}
+
+// Remove and return a randomly-selected card.
+oj_card ojl_pop_random(oj_cardlist *p) {
+    int c, r;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (0 == p->length) ER(OJE_BADINDEX);
+    r = ojr_rand(p->length);
+    c = p->cards[r];
+
+    if (p->pflags & OJF_UNIQUE) CLEAR(p->mask, c);
+    p->eflags = 0;
+    p->cards[r] = p->cards[--p->length];
+    return c;
+}
+
+// Return the index of the given card, if found.
+int ojl_index(oj_cardlist *p, oj_card card) {
+    int i;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    assert(card > 0 && card <= 54);
+
+    for (i = 0; i < p->length; ++i) {
+        if (card == p->cards[i]) return i;
+    }
+    return OJE_NOTFOUND; // Not really an error, so don't wrap in ER()
+}
+
+// Insert a card at a specific index.
+int ojl_insert(oj_cardlist *p, int index, oj_card card) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss && index >= 0);
+    assert(card > 0 && card <= 54);
+
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (p->length == p->allocation) ER(OJE_FULL);
+    if (index > p->length) ER(OJE_BADINDEX);
+
+    if (p->pflags & OJF_UNIQUE) {
+        if (ISSET(p->mask, card)) ER(OJE_DUPLICATE);
+        SET(p->mask, card);
+    }
+    memmove(p->cards + index + 1, p->cards + index,
+        (p->length - index) * sizeof(oj_card));
+    p->cards[index] = card;
+    p->eflags = 0;
+    return ++p->length;
+}
+
+// Remove the card at index.
+oj_card ojl_delete(oj_cardlist *p, int index) {
+    int v;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss && index >= 0);
+
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (index >= p->length) ER(OJE_BADINDEX);
+
+    v = p->cards[index];
+    if (p->pflags & OJF_UNIQUE) CLEAR(p->mask, v);
+    --p->length;
+
+    memmove(p->cards + index, p->cards + index + 1,
+        (p->length - index) * sizeof(oj_card));
+    p->eflags = 0;
+    return v;
+}
+
+// Remove the given card if found.
+oj_card ojl_delete_card(oj_cardlist *p, oj_card card) {
+    int i;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    assert(card > 0 && card <= 54);
+
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    i = ojl_index(p, card);
+    if (OJE_NOTFOUND == i) ER(OJE_NOTFOUND);
+    return ojl_delete(p, i);
+}
+
+// Add cards from one list to the end of another.
+int ojl_extend(oj_cardlist *destp, oj_cardlist *srcp, int count) {
     assert(0 != srcp && 0x10ACE0FF == srcp->_johnnymoss);
     assert(0 != destp && 0x10ACE0FF == destp->_johnnymoss);
 
@@ -235,133 +325,74 @@ int ojl_extend(oj_cardlist_t *destp, oj_cardlist_t *srcp, int count) {
     if (count > (destp->allocation - destp->length)) ER(OJE_FULL);
 
     if (destp->pflags & OJF_UNIQUE) {
-        c = 0;
-        for (i = 0; i < count; ++i) {
-            r = ojl_append(destp, srcp->cards[i]);
-            if (OJE_DUPLICATE == r) ER(OJE_DUPLICATE);
-            if (r > 0) ++c;
+        int dup = 0;
+        for (int i = 0; i < count; ++i) {
+            if (ISSET(destp->mask, srcp->cards[i])) {
+                dup = 1;
+                break;
+            }
         }
-        if (0 != c) srcp->eflags = 0;
-        return c;
-    } else {
-        memmove(destp->cards + destp->length, srcp->cards, count * sizeof(int));
-        destp->length += count;
+        if (dup) ER(OJE_DUPLICATE);
+        for (int i = 0; i < count; ++i) {
+            SET(destp->mask, srcp->cards[i]);
+        }
     }
+    memmove(destp->cards + destp->length, srcp->cards, count * sizeof(oj_card));
+    destp->length += count;
     srcp->eflags = 0;
     return count;
 }
 
-/* Insert a card at a specific index.
- */
-int ojl_insert(oj_cardlist_t *sp, int index, int card) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss && index >= 0);
-    assert(card > 0 && card <= 54);
+// Add cards from a string to the list
+int ojl_extend_text(oj_cardlist *p, char *src, int size) {
+    int count, dup = 0;
+    assert(0 != p && 0 != src && 0x10ACE0FF == p->_johnnymoss);
 
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    if (sp->length == sp->allocation) ER(OJE_FULL);
-    if (index > sp->length) ER(OJE_BADINDEX);
+    if (0 == size) size = p->allocation - p->length;
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (size > (p->allocation - p->length)) ER(OJE_FULL);
+    count = ojt_vals(src, p->cards + p->length, size);
 
-    if (sp->pflags & OJF_UNIQUE) {
-        if (ISSET(sp->mask, card)) ER(OJE_DUPLICATE);
-        SET(sp->mask, card);
+    if (p->pflags & OJF_UNIQUE) {
+        for (int i = 0; i < count; ++i) {
+            if (ISSET(p->mask, p->cards[i + p->length])) {
+                dup = 1;
+                break;
+            }
+        }
+        if (dup) ER(OJE_DUPLICATE);
+        for (int i = 0; i < count; ++i) {
+            SET(p->mask, p->cards[i + p->length]);
+        }
     }
-    memmove(sp->cards + index + 1, sp->cards + index,
-        (sp->length - index) * sizeof(int));
-    sp->cards[index] = card;
-    sp->eflags = 0;
-    return ++sp->length;
+    p->length += count;
+    p->eflags = 0;
+    return count;
 }
 
-/* Here's a bit of a deviation from the Python model: pop() does not
- * take an index, but that functionality is done with delete(), which
- * returns the value deleted.
- */
-__attribute__((hot))
-int ojl_pop(oj_cardlist_t * sp) {
-    int s;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    if (0 == sp->length) ER(OJE_BADINDEX);
-    s = --sp->length;
-
-    if (sp->pflags & OJF_UNIQUE) CLEAR(sp->mask, sp->cards[s]);
-    sp->eflags = 0;
-    return sp->cards[s];
-}
-
-/* Remove the card at index.
- */
-int ojl_delete(oj_cardlist_t * sp, int index) {
-    int v;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss && index >= 0);
-
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    if (index >= sp->length) ER(OJE_BADINDEX);
-
-    v = sp->cards[index];
-    if (sp->pflags & OJF_UNIQUE) CLEAR(sp->mask, v);
-    --sp->length;
-
-    memmove(sp->cards + index, sp->cards + index + 1,
-        (sp->length - index) * sizeof(int));
-    sp->eflags = 0;
-    return v;
-}
-
-/* Return the index of the given card, if found.
- */
-int ojl_index(oj_cardlist_t * sp, int card) {
-    int i;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    assert(card > 0 && card <= 54);
-
-    for (i = 0; i < sp->length; ++i) {
-        if (card == sp->cards[i]) return i;
-    }
-    return OJE_NOTFOUND; /* Not really an error, so don't wrap in ER() */
-}
-
-/* Remove the given card if found.
- */
-int ojl_remove(oj_cardlist_t * sp, int card) {
-    int i;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    assert(card > 0 && card <= 54);
-
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    i = ojl_index(sp, card);
-    if (OJE_NOTFOUND == i) ER(OJE_NOTFOUND);
-    return ojl_delete(sp, i);
-}
-
-/* Copy one whole hand onto another, overwriting it.
- */
-
-int ojl_copy(oj_cardlist_t *destp, oj_cardlist_t *srcp) {
+// Copy one whole list onto another, overwriting it.
+int ojl_copy(oj_cardlist *destp, oj_cardlist *srcp) {
     assert(0 != srcp && 0x10ACE0FF == srcp->_johnnymoss);
     assert(0 != destp && 0x10ACE0FF == destp->_johnnymoss);
 
     if (destp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
     if (destp->allocation < srcp->length) ER(OJE_FULL);
 
-    memmove(destp->cards, srcp->cards, srcp->length * sizeof(int));
+    memmove(destp->cards, srcp->cards, srcp->length * sizeof(oj_card));
     destp->length = srcp->length;
     destp->mask = srcp->mask;
     destp->eflags = 0;
-    return 0;
+    return destp->length;
 }
 
-/* Many applications involve sorting small hands inside a loop, so we go to
- * some effort here to optimize the hell out of those special cases.
- */
-
+// Begin sorting code
 #define SWAP(a,b) do{t=cp[a];cp[a]=cp[b];cp[b]=t;}while(0)
 #define CMP(a,b) (cp[a]>cp[b])
 #define CSWP(a,b) do{s=cp[a]+cp[b];d=abs(cp[a]-cp[b]);cp[a]=(s-d)>>1;cp[b]=(s+d)>>1;}while(0)
 
-static inline void heapify(int * cp, int n, int start) {
-    int t, lc, rc, head;
+static inline void heapify(oj_card *cp, int n, int start) {
+    oj_card t;
+    int lc, rc, head;
     int last = ((n + 1) >> 1);
 
     while (start < last) {
@@ -380,8 +411,11 @@ static inline void heapify(int * cp, int n, int start) {
     }
 }
 
-void _ojl_sort_int_array(int *cp, int n) {
-    int i, s, d, t;
+// Many applications involve sorting small hands inside a loop, so we go to
+// some effort here to optimize the hell out of those special cases.
+void _ojl_sort_cards(oj_card *cp, int n) {
+    oj_card t;
+    int i, s, d;
 
     switch (n) {
     case 0:
@@ -402,7 +436,7 @@ void _ojl_sort_int_array(int *cp, int n) {
         return;
     default:
         break;
-        /* Fall back to normal in-place heapsort */
+        // Fall back to normal in-place heapsort
     }
     for (i = (n - 1) >> 1; i >= 0; --i) heapify(cp, n - 1, i);
     for (i = n - 1; i > 0; --i) {
@@ -411,95 +445,97 @@ void _ojl_sort_int_array(int *cp, int n) {
     }
 }
 
-/* Sort cards in ascending order.
- */
-int ojl_sort(oj_cardlist_t *sp) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+// Sort cards in ascending order.
+int ojl_sort(oj_cardlist *p) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
 
-    _ojl_sort_int_array(sp->cards, sp->length);
-    sp->eflags = OJF_SORTED;
+    _ojl_sort_cards(p->cards, p->length);
+    p->eflags = OJF_SORTED;
     return 0;
 }
 
-/* Reverse order of cards.
- */
-int ojl_reverse(oj_cardlist_t * sp) {
-    int i, t, *cp = sp->cards;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+// Reverse order of cards.
+int ojl_reverse(oj_cardlist *p) {
+    oj_card t, *cp = p->cards;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
 
-    for (i = 0; i < (sp->length >> 1); ++i) {
-        SWAP(i, (sp->length - 1) - i);
+    for (int i = 0; i < (p->length >> 1); ++i) {
+        SWAP(i, (p->length - 1) - i);
     }
-    sp->eflags = 0;
+    p->eflags = 0;
     return 0;
 }
 
-__attribute__((hot))
-int ojl_equal(oj_cardlist_t * sp1, oj_cardlist_t * sp2) {
-    int i;
-
-    if (sp1->pflags & sp2->pflags & OJF_UNIQUE)
-        return sp1->mask == sp2->mask;
-
-    if (sp1->length != sp2->length) return 0;
-    for (i = 0; i < sp1->length; ++i) {
-        if (sp1->cards[i] != sp2->cards[i]) return 0;
-    }
-    return 1;
-}
-
-/* Fill a sequence with fresh cards based on deck type. Can be used to fill
- * multi-deck shoes as well. Removes any existing contents.
- */
-int ojl_fill(oj_cardlist_t *sp, int count, oj_deck_type_t dt) {
-    oj_cardlist_t *dp = ojd_deck(dt);
+// Fill a sequence with fresh cards based on deck type. Can be used to fill
+// multi-deck shoes as well. Removes any existing contents.
+int ojl_fill(oj_cardlist *p, int count, oj_decktype dt) {
+    oj_cardlist *dp = ojd_deck(dt);
     int c, remaining;
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    assert(0 != dp && 0x10ACE0FF == dp->_johnnymoss);
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
 
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-    if (count > sp->allocation) ER(OJE_FULL);
-    if ((sp->pflags & OJF_UNIQUE) && (count > dp->length)) ER(OJE_DUPLICATE);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (count > p->allocation) ER(OJE_FULL);
+    if ((p->pflags & OJF_UNIQUE) && (count > dp->length)) ER(OJE_DUPLICATE);
 
     remaining = count;
-    sp->length = 0;
+    p->length = 0;
     do {
         c = remaining;
         if (c > dp->length) c = dp->length;
-        memmove(sp->cards + sp->length, dp->cards, c * sizeof(int));
+        memmove(p->cards + p->length, dp->cards, c * sizeof(oj_card));
 
-        sp->length += c;
+        p->length += c;
         remaining -= c;
     } while (remaining);
 
-    if (sp->pflags & OJF_UNIQUE) ojl_build_mask(sp, &sp->mask);
-    sp->eflags = 0;
-    return sp->length;
+    if (p->pflags & OJF_UNIQUE) _build_mask(p, &p->mask);
+    p->eflags = 0;
+    return p->length;
 }
 
-/* TODO: implement simultaneous fill-and-shuffle using inside-out F-Y? */
+// Standard Fisher-Yates shuffle.
+int ojl_shuffle(oj_cardlist *p) {
+    oj_card t, *cp = p->cards;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
 
-/* Standard Fisher-Yates shuffle.
- */
-int ojl_shuffle(oj_cardlist_t * sp) {
-    assert(0 != sp && 0x10ACE0FF == sp->_johnnymoss);
-    if (sp->pflags & OJF_RDONLY) ER(OJE_RDONLY);
-
-    ojr_shuffle(sp->cards, sp->length, sp->length);
-    sp->eflags = 0;
+    if (p->length < 2) return 0;
+    for (int i = p->length-1; i > 0; --i) {
+        int j = ojr_rand(i+1);
+        SWAP(i,j);
+    }
+    p->eflags = 0;
     return 0;
 }
 
-/* Put a string representation of the card sequence into the given buffer,
- * clipping if necessary. Return the buffer, or NULL if it was too small for
- * anything useful.
- */
+// Fill with shuffled copy of standard deck.
+int ojl_fill_shuffled(oj_cardlist *p, oj_decktype dt) {
+    oj_cardlist *dp = ojd_deck(dt);
+    oj_card *cp = p->cards, *sp = dp->cards;
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+
+    if (p->pflags & OJF_RDONLY) ER(OJE_RDONLY);
+    if (p->allocation < dp->length) ER(OJE_FULL);
+
+    *cp = *sp;
+    for (int i = 1; i < dp->length; ++i) {
+        int j = ojr_rand(i+1);
+        cp[i] = cp[j];
+        cp[j] = sp[i];
+    }
+    p->length = dp->length;
+    p->eflags = 0;
+    return p->length;
+}
+
+// Put a string representation of the card sequence into the given buffer, clipping if
+// necessary. Return the buffer, or NULL if it was too small for anything useful.
 static int _minsize[] = { 3, 5, 8 };
 
-char *ojl_text(oj_cardlist_t *sp, char *buf, int bsize) {
-    int i, sl = sp->length, last = 0, clipat = sl + 1;
+char *ojl_text(oj_cardlist *p, char *buf, int bsize) {
+    int i, sl = p->length, last = 0, clipat = sl + 1;
     char *cn, *bp = buf;
 
     if ((sl <= 2 && bsize < _minsize[sl]) ||
@@ -517,7 +553,7 @@ char *ojl_text(oj_cardlist_t *sp, char *buf, int bsize) {
         } else if (0 != i) {
             *bp++ = ' ';
         }
-        cn = ojt_card(sp->cards[i]);
+        cn = ojt_card(p->cards[i]);
         *bp++ = *cn++;
         *bp++ = *cn;
     }

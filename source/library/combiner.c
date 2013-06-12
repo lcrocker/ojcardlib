@@ -16,12 +16,8 @@
 #include "ojcardlib.h"
 #include "bctable.h"
 
-/* Return (n choose k).
- */
-__attribute__((hot, pure))
-long long ojc_binomial(int n, int k) {
-    int i;
-    long long b;
+// Return (n choose k).
+int64_t ojc_binomial(int n, int k) {
     assert(n >= 0 && k >= 0);
 
     if (0 == k || n == k) return 1LL;
@@ -33,121 +29,61 @@ long long ojc_binomial(int n, int k) {
     if (n <= 54 && k <= 54) {
         return bctable[(((n - 3) * (n - 3)) >> 2) + k];
     }
-    /* Last resort: actually calculate */
-    b = 1LL;
-    for (i = 1; i <= k; ++i) {
+    // Last resort: actually calculate
+    int64_t b = 1LL;
+    for (int i = 1; i <= k; ++i) {
         b *= (n - (k - i));
-        if (b < 0) return -1LL; /* Overflow */
+        if (b < 0) return -1LL; // Overflow
         b /= i;
     }
     return b;
 }
 
-/* Initialize a new combiner. We need to provide a <deck> sequence that is
- * the set to make combinations of, a mutable <hand> sequence to receive the
- * combinations, <k> for the size of the combinations, and a <k>-sized integer
- * buffer for internal use. If <count> is nonzero, the monte carlo interator
- * will stop after that many iterations.
- */
+// Initialize a new combiner.
 int ojc_new(
-    oj_combiner_t *comb,        /* Combiner to initialize */
-    oj_cardlist_t *deck,        /* Universe set of cards */
-    oj_cardlist_t *hand,        /* Hand to put results into */
-    int k,                      /* Cards per hand */
-    long long count)            /* 0 for all combos, >0 for random count */
+    oj_combiner *cp,
+    oj_cardlist *deck,
+    oj_cardlist *hand,
+    int k,
+    int64_t count)
 {
     int i;
 
-    assert(0 != comb && 0 != deck && 0 != hand && 0 != k);
+    assert(0 != cp && 0 != deck && 0 != hand);
     assert(hand->allocation >= k);
     assert(deck->length >= k && deck->length <= 54);
+    assert(k >= 0 && k <= 54);
 
     if (hand->pflags & OJF_RDONLY) return OJE_RDONLY;
 
-    comb->_johnnymoss = 0x10ACE0FF;
-    comb->deck = deck;
-    comb->hand = hand;
-    comb->k = k;
+    cp->_johnnymoss = 0x10ACE0FF;
+    cp->deck = deck;
+    cp->hand = hand;
+    cp->k = k;
 
-    comb->total = ojc_binomial(deck->length, k);
-    comb->rank = 0LL;
-    if (0 == count) comb->remaining = comb->total;
-    else comb->remaining = count;
+    cp->total = ojc_binomial(deck->length, k);
+    if (0 == count) cp->remaining = cp->total;
+    else cp->remaining = count;
 
     hand->length = k;
     for (i = 0; i < k; ++i) hand->cards[i] = deck->cards[i];
     for (i = 0; i < deck->length; ++i) {
-        comb->map[i] = comb->deck_invert[deck->cards[i]] = i;
+        cp->map[i] = cp->invert[deck->cards[i]] = i;
     }
-    comb->flags = OJF_VALIDMAP | OJF_VALIDRANK;
 
-    hand->eflags = 0;
-    comb->extra = NULL;
-    return 0;
-}
-
-extern void _ojl_sort_int_array(int *cp, int n);
-
-/* Once we have set up a combiner with the appropriate values, we can calculate some
- * things without actually running the iterations. "Rank" is the order in which a
- * given hand would appear in the sequence if we ran it. The "hand_at" function does
- * the reverse: which hand would appear at that rank. These functions use
- * colexicographical order, because that's the simplest to calculate.
- */
-long long ojc_colex_rank(oj_cardlist_t *hand, oj_combiner_t *comb) {
-    int i, buf[56];
-    long long r = 0LL;
-    assert(0 != hand && 0 != comb);
-    assert(hand->length < 64);
-
-    if (hand->length != comb->k) return -1LL;
-
-    for (i = 0; i < comb->k; ++i) buf[i] = comb->deck_invert[hand->cards[i]];
-    _ojl_sort_int_array(buf, comb->k);
-    for (i = 0; i < comb->k; ++i) r += ojc_binomial(buf[i], i + 1);
-    return r;
-}
-
-int ojc_colex_hand_at(long long rank, oj_cardlist_t *hand, oj_combiner_t *comb) {
-    int i, buf[64], v = comb->deck->length;
-    long long b;
-    assert(0 != hand && 0 != comb);
-
-    if (hand->pflags & OJF_RDONLY) return OJE_RDONLY;
-    if (hand->allocation < comb->k) return OJE_FULL;
-    if (rank >= comb->total) return OJE_BADINDEX;
-
-    for (i = comb->k; i >= 1; --i) {
-        while ((b = ojc_binomial(v, i)) > rank) --v;
-        buf[i - 1] = v;
-        rank -= b;
-    }
-    hand->length = comb->k;
-    for (i = 0; i < comb->k; ++i) hand->cards[i] = comb->deck->cards[buf[i]];
     hand->eflags = 0;
     return 0;
 }
 
-/* The two "next" generator functions are used like this:
- *     ojc_new...
- *     while ojc_next... {
- *         ...
- *     }
- */
-__attribute__((hot))
-int ojc_next(oj_combiner_t *comb) {
-    int i, j, *a = comb->map;
-    int k = comb->k, n = comb->deck->length;
-    assert(0 != comb && 0x10ACE0FF == comb->_johnnymoss);
+// Generate next combination in colex order
+int ojc_next(oj_combiner *cp) {
+    int i, j, k = cp->k, n = cp->deck->length;
+    oj_card *a = cp->map;
+    assert(0 != cp && 0x10ACE0FF == cp->_johnnymoss);
 
-    if (0 == comb->remaining) return 0;
+    if (0 == cp->remaining) return 0;
 
-    if (! (comb->flags & OJF_VALIDRANK)) {
-        comb->rank = ojc_colex_rank(comb->hand, comb);
-        comb->remaining = comb->total - comb->rank;
-        comb->flags |= OJF_VALIDRANK;
-    }
-    if (comb->remaining != comb->total) {
+    if (cp->remaining != cp->total) {
         for (i = 0; i < k-1; ++i) {
             if (a[i] < a[i+1] - 1) break;
         }
@@ -155,36 +91,79 @@ int ojc_next(oj_combiner_t *comb) {
 
         ++a[i];
         for (j = 0; j < i; ++j) a[j] = j;
-
-        ++comb->rank;
-        comb->flags &= ~OJF_VALIDMAP;
     }
     for (int c = 0; c < k; ++c) {
-        comb->hand->cards[c] = comb->deck->cards[a[c]];
+        cp->hand->cards[c] = cp->deck->cards[a[c]];
     }
-    --comb->remaining;
-    comb->hand->eflags = 0;
+    --cp->remaining;
+    cp->hand->eflags = 0;
     return 1;
 }
 
-__attribute__((hot))
-int ojc_next_random(oj_combiner_t *comb) {
-    int i, k = comb->k, n = comb->deck->length;
-    assert(0 != comb && 0x10ACE0FF == comb->_johnnymoss);
+int ojc_next_random(oj_combiner *cp) {
+    int k = cp->k, n = cp->deck->length;
+    oj_card *mp = cp->map;
+    assert(0 != cp && 0x10ACE0FF == cp->_johnnymoss);
 
-    if (0 == comb->remaining) return 0;
+    if (0 == cp->remaining) return 0;
 
-    if (! (comb->flags & OJF_VALIDMAP)) {
-        for (i = 0; i < n; ++i) comb->map[i] = i;
-        comb->flags |= OJF_VALIDMAP;
+    // Bob Floyd's algorithm
+    int_fast64_t set = 0ll, m;
+    for (int j = n - k; j < n; ++j) {
+        int r = ojr_rand(j+1);
+        m = 1ll << r;
+
+        if (set & m) {
+            *mp++ = j;
+            set |= (1ll << j);
+        } else {
+            *mp++ = r;
+            set |= m;
+        }
     }
-    ojr_shuffle(comb->map, n, k);
-    comb->flags &= ~OJF_VALIDRANK;
-
-    for (i = 0; i < k; ++i) {
-        comb->hand->cards[i] = comb->deck->cards[comb->map[i]];
+    for (int i = 0; i < k; ++i) {
+        cp->hand->cards[i] = cp->deck->cards[cp->map[i]];
     }
-    --comb->remaining;
-    comb->hand->eflags = 0;
+    --cp->remaining;
+    cp->hand->eflags = 0;
     return 1;
+}
+
+extern void _ojl_sort_cards(oj_card *cp, int n);
+
+// Return colex rank of given hand
+int64_t ojc_colex_rank(oj_combiner *cp, oj_cardlist *hand) {
+    oj_card buf[56];
+    int64_t r = 0LL;
+    assert(0 != hand && 0 != cp);
+    assert(hand->length < 64);
+
+    if (hand->length != cp->k) return -1LL;
+
+    for (int i = 0; i < cp->k; ++i) buf[i] = cp->invert[hand->cards[i]];
+    _ojl_sort_cards(buf, cp->k);
+    for (int i = 0; i < cp->k; ++i) r += ojc_binomial(buf[i], i + 1);
+    return r;
+}
+
+// Return hand at given rank
+int ojc_colex_hand_at(oj_combiner *cp, int64_t rank, oj_cardlist *hand) {
+    int i, n = cp->deck->length;
+    oj_card buf[64];
+    int64_t b;
+    assert(0 != hand && 0 != cp);
+
+    if (hand->pflags & OJF_RDONLY) return OJE_RDONLY;
+    if (hand->allocation < cp->k) return OJE_FULL;
+    if (rank >= cp->total) return OJE_BADINDEX;
+
+    for (i = cp->k; i >= 1; --i) {
+        while ((b = ojc_binomial(n, i)) > rank) --n;
+        buf[i-1] = n;
+        rank -= b;
+    }
+    hand->length = cp->k;
+    for (i = 0; i < cp->k; ++i) hand->cards[i] = cp->deck->cards[buf[i]];
+    hand->eflags = 0;
+    return 0;
 }

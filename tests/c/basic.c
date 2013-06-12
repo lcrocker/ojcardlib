@@ -17,7 +17,7 @@
 #include "ojcardlib.h"
 
 int cards_and_decks() {
-    oj_cardlist_t *dp;
+    oj_cardlist *dp;
 
     if (13 != OJ_CARD(OJR_FIVE, OJS_CLUB)) return 1;
     if (30 != OJ_CARD(OJR_NINE, OJS_DIAMOND)) return 2;
@@ -31,22 +31,22 @@ int cards_and_decks() {
     if (OJS_SPADE != OJ_SUIT(48)) return 9;
     if (OJR_JOKER != OJ_RANK(54)) return 10;
 
-    if (ojd_ntypes() < 6) return 11;
+    if (ojd_ntypes() < 7) return 11;
     if (52 != ojd_size(OJD_STANDARD)) return 12;
-    if (54 != ojd_size(OJD_TWOJOKERS)) return 13;
-    if (40 != ojd_size(OJD_STRIPPED40)) return 14;
+    if (24 != ojd_size(OJD_PINOCHLE)) return 13;
+    if (40 != ojd_size(OJD_PAN)) return 14;
 
     dp = ojd_deck(OJD_ONEJOKER);
     if (53 != dp->length) return 15;
     if (OJ_CARD(OJR_DEUCE, OJS_CLUB) != dp->cards[0]) return 16;
     if (OJ_JOKER != dp->cards[52]) return 17;
 
-    dp = ojd_deck(OJD_STRIPPED32);
+    dp = ojd_deck(OJD_SKAT);
     if (32 != dp->length) return 18;
     if (OJ_CARD(OJR_SEVEN, OJS_CLUB) != dp->cards[0]) return 19;
     if (OJ_CARD(OJR_ACE, OJS_SPADE) != dp->cards[31]) return 20;
 
-    dp = ojd_deck(OJD_STRIPPED40J);
+    dp = ojd_deck(OJD_PANJ);
     if (41 != dp->length) return 21;
     if (OJ_CARD(OJR_SEVEN, OJS_SPADE) != dp->cards[23]) return 22;
     if (OJ_CARD(OJR_JACK, OJS_CLUB) != dp->cards[24]) return 23;
@@ -56,9 +56,10 @@ int cards_and_decks() {
 }
 
 int text_functions() {
-    int v, arr[20];
+    int v;
+    oj_card arr[20];
     char t[60];
-    oj_cardlist_t seq;
+    oj_cardlist seq;
 
     if (0 != strcmp("Jd",
         ojt_card(OJ_CARD(OJR_JACK, OJS_DIAMOND)))) return 1;
@@ -96,10 +97,12 @@ int text_functions() {
 
     ojl_text(&seq, t, 60);
     if (0 != strcmp("(3s Ad Jc 7d Ts)", t)) return 18;
+
     v = ojt_vals("KsKc5c9d2hQcJk", arr, 19);
     if (7 != v) return 20;
     if (OJ_CARD(OJR_KING, OJS_SPADE) != arr[0]) return 21;
     if (OJ_CARD(OJR_QUEEN, OJS_CLUB) != arr[5]) return 22;
+
     ojl_text(&seq, t, 60);
     if (0 != strcmp("(Ks Kc 5c 9d 2h)", t)) return 23;
 

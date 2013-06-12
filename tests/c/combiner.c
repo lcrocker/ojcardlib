@@ -16,9 +16,9 @@
 #include "ojcardlib.h"
 #include "stats.h"
 
-oj_cardlist_t deck, hand1, hand2;
-oj_combiner_t iter1, iter2;
-int dbuf[54], hbuf1[16], hbuf2[16];
+oj_cardlist deck, hand1, hand2;
+oj_combiner iter1, iter2;
+oj_card dbuf[54], hbuf1[16], hbuf2[16];
 
 void initialize(void) {
     ojl_new(&deck, dbuf, 53);
@@ -32,7 +32,7 @@ int validate(void) {
 
     for (i = 0; i < iter1.deck->length; ++i) {
         f[i] = 0;
-        if (i != iter1.deck_invert[iter1.deck->cards[i]]) return 2;
+        if (i != iter1.invert[iter1.deck->cards[i]]) return 2;
     }
     for (i = 0; i < iter1.k; ++i) {
         if (iter1.map[i] < 0 || iter1.map[i] >= iter1.deck->length) return 1;
@@ -47,7 +47,7 @@ long long tvals[] = { 1326, 19600, 91390, 169991, 74613, 11440, 792, 1 };
 
 int test_combinations(int n, int k) {
     int i, r;
-    long long t, c;
+    int64_t t, c;
     assert(0x10ACE0FF == deck._johnnymoss);
 
     ojl_fill(&deck, 52, OJD_STANDARD);
@@ -59,8 +59,8 @@ int test_combinations(int n, int k) {
     while (ojc_next(&iter1)) {
         if (c != (iter1.total - iter1.remaining) - 1) return 10;
 
-        t = ojc_colex_rank(&hand1, &iter1);
-        ojc_colex_hand_at(t, &hand2, &iter1);
+        t = ojc_colex_rank(&iter1, &hand1);
+        ojc_colex_hand_at(&iter1, t, &hand2);
         if (! ojl_equal(&hand2, &hand1)) return 30;
         ++c;
 
@@ -98,7 +98,7 @@ int loop_combinations(void) {
 
 int test_montecarlo(int n, int k, long long count) {
     int r;
-    long long t;
+    int64_t t;
     assert(0x10ACE0FF == deck._johnnymoss);
 
     ojl_fill(&deck, 52, OJD_STANDARD);
@@ -107,8 +107,8 @@ int test_montecarlo(int n, int k, long long count) {
 
     t = ojc_new(&iter1, &deck, &hand1, k, count);
     while (ojc_next_random(&iter1)) {
-        t = ojc_colex_rank(&hand1, &iter1);
-        ojc_colex_hand_at(t, &hand2, &iter1);
+        t = ojc_colex_rank(&iter1, &hand1);
+        ojc_colex_hand_at(&iter1, t, &hand2);
 
         if (0 == ojr_rand(10000)) {
             r = validate();
@@ -131,30 +131,20 @@ int loop_montecarlo(void) {
     return 0;
 }
 
-long long buckets[52];
-
 int random_balance(void) {
-    int i;
-    long long count = 10000000;
-    double exp, d, t, sd, z, maxz;
-    struct buckets *bp;
+    int64_t count = 10000000;
+    struct counter *bp;
 
     ojl_fill(&deck, 52, OJD_STANDARD);
     ojc_new(&iter1, &deck, &hand1, 5, count);
-    bp = create_buckets(52);
+    bp = create_counter(52);
 
     fprintf(stderr, "Combiner balance test count = %lld...\n", count);
-    for (i = 0; i < 52; ++i) buckets[i] = 0;
     while (ojc_next_random(&iter1)) {
-        for (i = 0; i < 5; ++i) add_value(bp, hand1.cards[i] - 1);
+        for (int i = 0; i < 5; ++i) INC(bp, hand1.cards[i] - 1);
     }
-    calculate_stats(bp);
-    fprintf(stderr, "%3d buckets: mean = %10.2f, stddev = %7.2f (%4.2f %%), maxz = %4.2f\n",
-        52, bp->mean, bp->stddev, (100.0 * bp->stddev) / bp->mean, bp->maxz);
-
-    if ((bp->stddev / bp->mean) > 0.005) return 1;
-    if (bp->maxz > 4.0) return 2;
-    free_buckets(bp);
+    counter_report(bp);
+    free_counter(bp);
     return 0;
 }
 

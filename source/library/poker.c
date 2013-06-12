@@ -15,25 +15,24 @@
 #include "ojcardlib.h"
 #include "ldctables.h"
 
-/* The magic here is in building the lookup tables. See pokertables.py in the
- * python directory. Call this when you know the hand is exactly five cards
- * and you want the value quickly.
- */
-int ojp_eval5(oj_cardlist_t *sp) {
+// Evaluate five-card poker hand.
+int ojp_eval5(oj_cardlist *p) {
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
+    assert(5 == p->length);
+
     return ldc4[ ldc3[ ldc2[ ldc1[
-        52 * (sp->cards[0] - 1) + sp->cards[1] ]
-           + sp->cards[2] ] + sp->cards[3] ] + sp->cards[4] ];
+        52 * (p->cards[0] - 1) + p->cards[1] ]
+           + p->cards[2] ] + p->cards[3] ] + p->cards[4] ];
 }
 
 // On my machine, branchless MINs are actually a bit slower
 // than the straightforward one.
 #define MIN(x,y) (((x)<(y)) ? (x) : (y))
 
-/* 7 cards is common enough to deserve special case code.
- * Unlike best5(), this won't return the actual hand.
- */
-int ojp_eval7(oj_cardlist_t *sp) {
-    int *h = sp->cards;
+// 7 cards is common enough to deserve special case code.
+// Unlike best5(), this won't return the actual hand, but it's faster.
+int ojp_eval7(oj_cardlist *p) {
+    oj_card *h = p->cards;
     int b0 = 52 * (h[0] - 1);
     int b1 = ldc1[ b0 + h[1] ];
     int b2 = ldc2[ b1 + h[2] ];
@@ -133,157 +132,153 @@ int ojp_eval7(oj_cardlist_t *sp) {
     return best;
 }
 
-static oj_combiner_t piter;
-static oj_cardlist_t phand;
-static int hbuf[8];
+static oj_combiner _cmb;
+static oj_cardlist _hand;
+static oj_card _hbuf[8];
 
-/* Given a sequence of any length, find the best 5-card hand and its value.
- */
-int ojp_best5(oj_cardlist_t *sp, oj_cardlist_t *bh) {
-    int v, best, i;
-    assert(0 != sp && sp->length >= 5);
+// Given a sequence of any length, find the best 5-card hand and its value.
+int ojp_best5(oj_cardlist *p, oj_cardlist *bh) {
+    assert(0 != p && p->length >= 5);
     assert(0 != bh && bh->allocation >= 5 && (!(bh->pflags & OJF_RDONLY)));
 
-    if (5 == sp->length) {
-        ojl_copy(bh, sp);
-        return ojp_eval5(sp);
+    if (5 == p->length) {
+        ojl_copy(bh, p);
+        return ojp_eval5(p);
     }
-    ojl_new(&phand, hbuf, 5);
-    ojc_new(&piter, sp, &phand, 5, 0LL);
+    ojl_new(&_hand, _hbuf, 5);
+    ojc_new(&_cmb, p, &_hand, 5, 0LL);
 
-    best = 9999;
-    while ((i = ojc_next(&piter))) {
-        v = ojp_eval5(piter.hand);
+    int best = 9999;
+    while (ojc_next(&_cmb)) {
+        int v = ojp_eval5(&_hand);
         if (v < best) {
             best = v;
-            ojl_copy(bh, piter.hand);
-
+            ojl_copy(bh, &_hand);
         }
     }
     return best;
 }
 
-/* Collect all the info necessary to display a poker hand and its value in a
- * user-friendly way. This is a big ugly glob of special cases, but there's
- * really not much way to simplify it that I can think of.
- */
-int ojp_hand_info(oj_poker_hand_info_t *pi, oj_cardlist_t *sp, int val) {
-    int i, t[5];
-    assert(0 != pi && 0 != sp);
-    assert(5 == sp->length);
+// Collect all the info necessary to display a poker hand and its value in a
+// user-friendly way. This is a big ugly glob of special cases, but there's
+// really not much way to simplify it.
+int ojp_hand_info(oj_poker_hand_info *pi, oj_cardlist *p, int val) {
+    oj_card t[5], *h = p->cards;
+    assert(0 != pi && 0 != p);
+    assert(5 == p->length);
 
-    if (-1 == val) val = ojp_eval5(sp);
+    if (-1 == val) val = ojp_eval5(p);
     pi->val = val;
 
-    ojl_sort(sp);
-    ojl_reverse(sp);
+    ojl_sort(p);
+    ojl_reverse(p);
 
     if (val < 11) {
-        pi->group = 0;  /* Straight Flush */
+        pi->group = 1;  // Straight Flush
         pi->nranks = 1;
-        pi->ranks[0] = OJ_RANK(sp->cards[0]);
-        if (OJR_ACE == pi->ranks[0] && OJR_FIVE == OJ_RANK(sp->cards[1])) {
+        pi->ranks[0] = OJ_RANK(h[0]);
+        if (OJR_ACE == pi->ranks[0] && OJR_FIVE == OJ_RANK(h[1])) {
             pi->ranks[0] = OJR_FIVE;
-            t[0] = sp->cards[0];
-            memmove(sp->cards, sp->cards + 1, 4 * sizeof(int));
-            sp->cards[4] = t[0];
+            t[0] = h[0];
+            memmove(h, h + 1, 4 * sizeof(oj_card));
+            h[4] = t[0];
         }
     } else if (val < 167) {
-        pi->group = 1;  /* Quads */
+        pi->group = 2;  // Quads
         pi->nranks = 2;
-        if (OJ_RANK(sp->cards[0]) != OJ_RANK(sp->cards[1])) {
-            t[0] = sp->cards[0];
-            memmove(sp->cards, sp->cards + 1, 4 * sizeof(int));
-            sp->cards[4] = t[0];
+        if (OJ_RANK(h[0]) != OJ_RANK(h[1])) {
+            t[0] = h[0];
+            memmove(h, h + 1, 4 * sizeof(oj_card));
+            h[4] = t[0];
         }
-        pi->ranks[0] = OJ_RANK(sp->cards[0]);
-        pi->ranks[1] = OJ_RANK(sp->cards[4]);
+        pi->ranks[0] = OJ_RANK(h[0]);
+        pi->ranks[1] = OJ_RANK(h[4]);
     } else if (val < 323) {
-        pi->group = 2;  /* Full House */
+        pi->group = 3;  // Full House
         pi->nranks = 2;
-        if (OJ_RANK(sp->cards[0]) != OJ_RANK(sp->cards[2])) {
-            memmove(t, sp->cards, 2 * sizeof(int));
-            memmove(sp->cards, sp->cards + 2, 3 * sizeof(int));
-            memmove(sp->cards + 3, t, 2 * sizeof(int));
+        if (OJ_RANK(h[0]) != OJ_RANK(h[2])) {
+            memmove(t, h, 2 * sizeof(oj_card));
+            memmove(h, h + 2, 3 * sizeof(oj_card));
+            memmove(h + 3, t, 2 * sizeof(oj_card));
         }
-        pi->ranks[0] = (sp->cards[0] - 1) >> 2;
-        pi->ranks[1] = (sp->cards[3] - 1) >> 2;
+        pi->ranks[0] = OJ_RANK(h[0]);
+        pi->ranks[1] = OJ_RANK(h[3]);
     } else if (val < 1600) {
-        pi->group = 3;  /* Flush */
+        pi->group = 4;  // Flush
         pi->nranks = 5;
-        for (i = 0; i < 5; ++i) pi->ranks[i] = OJ_RANK(sp->cards[i]);
+        for (int i = 0; i < 5; ++i) pi->ranks[i] = OJ_RANK(h[i]);
     } else if (val < 1610) {
-        pi->group = 4;  /* Straight */
+        pi->group = 5;  // Straight
         pi->nranks = 1;
-        pi->ranks[0] = OJ_RANK(sp->cards[0]);
-        if (OJR_ACE == pi->ranks[0] && OJR_FIVE == OJ_RANK(sp->cards[1])) {
+        pi->ranks[0] = OJ_RANK(h[0]);
+        if (OJR_ACE == pi->ranks[0] && OJR_FIVE == OJ_RANK(h[1])) {
             pi->ranks[0] = OJR_FIVE;
-            t[0] = sp->cards[0];
-            memmove(sp->cards, sp->cards + 1, 4 * sizeof(int));
-            sp->cards[4] = t[0];
+            t[0] = h[0];
+            memmove(h, h + 1, 4 * sizeof(oj_card));
+            h[4] = t[0];
         }
     } else if (val < 2468) {
-        pi->group = 5;  /* Trips */
+        pi->group = 6;  // Trips
         pi->nranks = 3;
-        for (i = 0; i < 3; ++i) t[i] = OJ_RANK(sp->cards[i]);
+        for (int i = 0; i < 3; ++i) t[i] = OJ_RANK(h[i]);
         if (t[0] != t[1]) {
             if (t[1] != t[2]) {
-                memmove(t, sp->cards, 2 * sizeof(int));
-                memmove(sp->cards, sp->cards + 2, 3 * sizeof(int));
-                memmove(sp->cards + 3, t, 2 * sizeof(int));
+                memmove(t, h, 2 * sizeof(oj_card));
+                memmove(h, h + 2, 3 * sizeof(oj_card));
+                memmove(h + 3, t, 2 * sizeof(oj_card));
             } else {
-                t[0] = sp->cards[0];
-                memmove(sp->cards, sp->cards + 1, 3 * sizeof(int));
-                sp->cards[3] = t[0];
+                t[0] = h[0];
+                memmove(h, h + 1, 3 * sizeof(oj_card));
+                h[3] = t[0];
             }
         }
-        for (i = 0; i < 3; ++i) pi->ranks[i] = OJ_RANK(sp->cards[i + 2]);
+        for (int i = 0; i < 3; ++i) pi->ranks[i] = OJ_RANK(h[i+2]);
     } else if (val < 3326) {
-        pi->group = 6;  /* Two Pair */
+        pi->group = 7;  // Two Pair
         pi->nranks = 3;
-        for (i = 0; i < 5; ++i) t[i] = OJ_RANK(sp->cards[i]);
+        for (int i = 0; i < 5; ++i) t[i] = OJ_RANK(h[i]);
         if (t[3] == t[4]) {
             if (t[0] == t[1]) {
-                t[0] = sp->cards[2];
-                memmove(sp->cards + 2, sp->cards + 3, 2 * sizeof(int));
-                sp->cards[4] = t[0];
+                t[0] = h[2];
+                memmove(h + 2, h + 3, 2 * sizeof(oj_card));
+                h[4] = t[0];
             } else {
-                t[0] = sp->cards[0];
-                memmove(sp->cards, sp->cards + 1, 4 * sizeof(int));
-                sp->cards[4] = t[0];
+                t[0] = h[0];
+                memmove(h, h + 1, 4 * sizeof(oj_card));
+                h[4] = t[0];
             }
         }
-        for (i = 0; i < 3; ++i) pi->ranks[i] = OJ_RANK(sp->cards[i << 1]);
+        for (int i = 0; i < 3; ++i) pi->ranks[i] = OJ_RANK(h[i << 1]);
     } else if (val < 6186) {
-        pi->group = 7;  /* One Pair */
+        pi->group = 8;  // One Pair
         pi->nranks = 4;
-        for (i = 0; i < 5; ++i) t[i] = OJ_RANK(sp->cards[i]);
+        for (int i = 0; i < 5; ++i) t[i] = OJ_RANK(h[i]);
         if (t[1] == t[2]) {
-            t[0] = sp->cards[0];
-            memmove(sp->cards, sp->cards + 1, 2 * sizeof(int));
-            sp->cards[2] = t[0];
+            t[0] = h[0];
+            memmove(h, h + 1, 2 * sizeof(oj_card));
+            h[2] = t[0];
         } else if (t[2] == t[3]) {
-            memmove(t, sp->cards, 2 * sizeof(int));
-            memmove(sp->cards, sp->cards + 2, 2 * sizeof(int));
-            memmove(sp->cards + 2, t, 2 * sizeof(int));
+            memmove(t, h, 2 * sizeof(oj_card));
+            memmove(h, h + 2, 2 * sizeof(oj_card));
+            memmove(h + 2, t, 2 * sizeof(oj_card));
         } else if (t[3] == t[4]) {
-            memmove(t, sp->cards, 3 * sizeof(int));
-            memmove(sp->cards, sp->cards + 3, 2 * sizeof(int));
-            memmove(sp->cards + 2, t, 3 * sizeof(int));
+            memmove(t, h, 3 * sizeof(oj_card));
+            memmove(h, h + 3, 2 * sizeof(oj_card));
+            memmove(h + 2, t, 3 * sizeof(oj_card));
         }
-        for (i = 0; i < 4; ++i) pi->ranks[i] = OJ_RANK(sp->cards[i + 1]);
+        for (int i = 0; i < 4; ++i) pi->ranks[i] = OJ_RANK(h[i+1]);
     } else {
-        pi->group = 8;  /* No Pair */
+        pi->group = 9;  // No Pair
         pi->nranks = 5;
-        for (i = 0; i < 5; ++i) pi->ranks[i] = OJ_RANK(sp->cards[i]);
+        for (int i = 0; i < 5; ++i) pi->ranks[i] = OJ_RANK(h[i]);
     }
     pi->_johnnymoss = 0x10ACE0FF;
     return pi->group;
 }
 
 static char *_ojp_hand_group_names[] = {
-    "Straight Flush", "Four of a Kind", "Full House", "Flush", "Straight",
-    "Three of a Kind", "Two Pair", "One Pair", "No Pair"
+    NULL, "Straight Flush", "Four of a Kind", "Full House", "Flush",
+    "Straight", "Three of a Kind", "Two Pair", "One Pair", "No Pair"
 };
 
 char *ojp_hand_group_name(int g) {
@@ -291,52 +286,50 @@ char *ojp_hand_group_name(int g) {
     return _ojp_hand_group_names[g];
 }
 
-static char _hdbuf[48];
-
 #define RN(x) (ojt_rank(pi->ranks[x]))
 #define RNP(x) ((OJR_SIX==pi->ranks[x])?"es":"s")
 
-char *ojp_hand_description(oj_poker_hand_info_t *pi) {
+char *ojp_hand_description(oj_poker_hand_info *pi, char *buf, int size) {
     assert(0x10ACE0FF == pi->_johnnymoss);
 
     switch (pi->group) {
     case 0:
         if (12 == pi->ranks[0]) {
-            snprintf(_hdbuf, 48, "Royal Flush");
+            snprintf(buf, size, "Royal Flush");
         } else {
-            snprintf(_hdbuf, 48, "%s-high Straight Flush", RN(0));
+            snprintf(buf, size, "%s-high Straight Flush", RN(0));
         }
         break;
     case 1:
-        snprintf(_hdbuf, 48, "Four %s%s, %s", RN(0), RNP(0), RN(1));
+        snprintf(buf, size, "Four %s%s, %s", RN(0), RNP(0), RN(1));
         break;
     case 2:
-        snprintf(_hdbuf, 48, "%s%s Full of %s%s", RN(0), RNP(0),
+        snprintf(buf, size, "%s%s Full of %s%s", RN(0), RNP(0),
             RN(1), RNP(1));
         break;
     case 3:
-        snprintf(_hdbuf, 48, "Flush, %s, %s, %s, %s, %s", RN(0), RN(1),
+        snprintf(buf, size, "Flush, %s, %s, %s, %s, %s", RN(0), RN(1),
             RN(2), RN(3), RN(4));
         break;
     case 4:
-        snprintf(_hdbuf, 48, "%s-high Straight", RN(0));
+        snprintf(buf, size, "%s-high Straight", RN(0));
         break;
     case 5:
-        snprintf(_hdbuf, 48, "Three %s%s, %s, %s", RN(0), RNP(0),
+        snprintf(buf, size, "Three %s%s, %s, %s", RN(0), RNP(0),
             RN(1), RN(2));
         break;
     case 6:
-        snprintf(_hdbuf, 48, "Two Pair, %s%s and %s%s, %s", RN(0), RNP(0),
+        snprintf(buf, size, "Two Pair, %s%s and %s%s, %s", RN(0), RNP(0),
             RN(1), RNP(1), RN(2));
         break;
     case 7:
-        snprintf(_hdbuf, 48, "Pair of %s%s, %s, %s, %s", RN(0), RNP(0),
+        snprintf(buf, size, "Pair of %s%s, %s, %s, %s", RN(0), RNP(0),
             RN(1), RN(2), RN(3));
         break;
     case 8:
-        snprintf(_hdbuf, 48, "No Pair, %s, %s, %s, %s, %s", RN(0), RN(1),
+        snprintf(buf, size, "No Pair, %s, %s, %s, %s, %s", RN(0), RN(1),
             RN(2), RN(3), RN(4));
         break;
     }
-    return _hdbuf;
+    return buf;
 }
