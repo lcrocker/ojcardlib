@@ -121,5 +121,7 @@ int main(int argc, char *argv[]) {
     } else {
         fprintf(stderr, "passed.\n");
     }
+    (void)(argc);
+    (void)(argv); // keep -Wextra happy
     return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }

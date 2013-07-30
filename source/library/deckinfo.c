@@ -57,13 +57,13 @@ static oj_card _pinochle_cards[] = {
 #define OJD_NTYPES 7
 
 oj_cardlist _oj_common_decks[] = {
-    { 0x10ACE0FF, 52, 52, OJF_RDONLY, 0, 0LL, _standard_cards },
-    { 0x10ACE0FF, 53, 53, OJF_RDONLY, 0, 0LL, _onejoker_cards },
-    { 0x10ACE0FF, 54, 54, OJF_RDONLY, 0, 0LL, _twojokers_cards },
-    { 0x10ACE0FF, 32, 32, OJF_RDONLY, 0, 0LL, _skat_cards },
-    { 0x10ACE0FF, 40, 40, OJF_RDONLY, 0, 0LL, _pan_cards },
-    { 0x10ACE0FF, 41, 41, OJF_RDONLY, 0, 0LL, _panj_cards },
-    { 0x10ACE0FF, 24, 24, OJF_RDONLY, 0, 0LL, _pinochle_cards },
+    { 0x10ACE0FF, 52, 52, OJF_RDONLY, 0, 0LL, _standard_cards, {0,0,0,0} },
+    { 0x10ACE0FF, 53, 53, OJF_RDONLY, 0, 0LL, _onejoker_cards, {0,0,0,0} },
+    { 0x10ACE0FF, 54, 54, OJF_RDONLY, 0, 0LL, _twojokers_cards, {0,0,0,0} },
+    { 0x10ACE0FF, 32, 32, OJF_RDONLY, 0, 0LL, _skat_cards, {0,0,0,0} },
+    { 0x10ACE0FF, 40, 40, OJF_RDONLY, 0, 0LL, _pan_cards, {0,0,0,0} },
+    { 0x10ACE0FF, 41, 41, OJF_RDONLY, 0, 0LL, _panj_cards, {0,0,0,0} },
+    { 0x10ACE0FF, 24, 24, OJF_RDONLY, 0, 0LL, _pinochle_cards, {0,0,0,0} },
 };
 
 int ojd_ntypes(void) { return OJD_NTYPES; }

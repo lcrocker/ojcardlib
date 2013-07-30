@@ -51,15 +51,15 @@ static long long _masks[] = { 0LL,
 #define SET(m,c) ((m) |= M(c))
 #define CLEAR(m,c) ((m) &= ~M(c))
 
-// Build a 64-bit mask value for the give cardlist. Return the number of duplicates found.
-static int _build_mask(oj_cardlist *p, uint64_t *mp) {
+// Rebuild a 64-bit mask value for the give cardlist. Return the number of duplicates found.
+static int _build_mask(oj_cardlist *p) {
     int i, dups = 0;
-    assert(0 != p && 0 != mp && 0x10ACE0FF == p->_johnnymoss);
+    assert(0 != p && 0x10ACE0FF == p->_johnnymoss);
 
-    *mp = 0LL;
+    p->mask = 0LL;
     for (i = 0; i < p->length; ++i) {
-        if (ISSET(*mp, p->cards[i])) ++dups;
-        SET(*mp, p->cards[i]);
+        if (ISSET(p->mask, p->cards[i])) ++dups;
+        SET(p->mask, p->cards[i]);
     }
     return dups;
 }
@@ -85,6 +85,7 @@ int ojl_set_pflag(oj_cardlist *p, int mask) {
     if ((p->pflags & OJF_RDONLY) && (OJF_RDONLY != mask)) ER(OJE_RDONLY);
 
     p->pflags |= mask;
+    if (OJF_UNIQUE == mask) _build_mask(p);
     return 0;
 }
 
@@ -159,7 +160,7 @@ int ojl_truncate(oj_cardlist *p, int size) {
 
     p->length = size;
     p->eflags = 0;
-    if (p->pflags & OJF_UNIQUE) _build_mask(p, &p->mask);
+    if (p->pflags & OJF_UNIQUE) _build_mask(p);
     return 0;
 }
 
@@ -390,32 +391,9 @@ int ojl_copy(oj_cardlist *destp, oj_cardlist *srcp) {
 #define CMP(a,b) (cp[a]>cp[b])
 #define CSWP(a,b) do{s=cp[a]+cp[b];d=abs(cp[a]-cp[b]);cp[a]=(s-d)>>1;cp[b]=(s+d)>>1;}while(0)
 
-static inline void heapify(oj_card *cp, int n, int start) {
-    oj_card t;
-    int lc, rc, head;
-    int last = ((n + 1) >> 1);
-
-    while (start < last) {
-        lc = (start << 1) + 1;
-        rc = lc + 1;
-
-        if (rc <= n) {
-            if (CMP(rc, lc)) head = rc;
-            else head = lc;
-        } else head = lc;
-
-        if (CMP(head, start)) {
-            SWAP(head, start);
-            start = head;
-        } else break;
-    }
-}
-
-// Many applications involve sorting small hands inside a loop, so we go to
-// some effort here to optimize the hell out of those special cases.
 void _ojl_sort_cards(oj_card *cp, int n) {
     oj_card t;
-    int i, s, d;
+    int s, d, pivot, pval, left, right;
 
     switch (n) {
     case 0:
@@ -436,13 +414,25 @@ void _ojl_sort_cards(oj_card *cp, int n) {
         return;
     default:
         break;
-        // Fall back to normal in-place heapsort
     }
-    for (i = (n - 1) >> 1; i >= 0; --i) heapify(cp, n - 1, i);
-    for (i = n - 1; i > 0; --i) {
-        SWAP(0, i);
-        heapify(cp, i - 1, 0);
+    pivot = ojr_rand(n);
+    SWAP(0, pivot);
+
+    left = 0;
+    right = n;
+    pval = *cp;
+
+    while (1) {
+        do --right; while (cp[right] > pval);
+        do ++left; while (cp[left] < pval);
+
+        if (left < right) SWAP(left, right);
+        else break;
     }
+    SWAP(0, right);
+
+    if (right > 1) _ojl_sort_cards(cp, right);
+    if (right < n-2) _ojl_sort_cards(cp + (right+1), n - (right+1));
 }
 
 // Sort cards in ascending order.
@@ -490,7 +480,7 @@ int ojl_fill(oj_cardlist *p, int count, oj_decktype dt) {
         remaining -= c;
     } while (remaining);
 
-    if (p->pflags & OJF_UNIQUE) _build_mask(p, &p->mask);
+    if (p->pflags & OJF_UNIQUE) _build_mask(p);
     p->eflags = 0;
     return p->length;
 }

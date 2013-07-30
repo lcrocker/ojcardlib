@@ -28,5 +28,7 @@ int main(int argc, char *argv[]) {
     ojl_text(&hand, text, sizeof(text));
     printf("%s\n", text);
 
+    (void)(argc);
+    (void)(argv); // keep -Wextra happy
     return 0;
 }

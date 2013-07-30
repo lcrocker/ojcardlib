@@ -12,10 +12,10 @@ MODDIR = ojcardlib
 CLASSDIR = com/onejoker/cardlib
 
 CC = gcc
-CFLAGS = -g -DDEBUG -Wall -std=c99 -pedantic -fpic
+CFLAGS = -g -DDEBUG -Wall -Wextra -std=c99 -pedantic -fpic
 # CFLAGS = -O3 -DNDEBUG -Wall -std=c99 -pedantic -fpic
 CXX = g++
-CXXFLAGS = -g -DDEBUG -Wall -std=c++98 -pedantic -fpic
+CXXFLAGS = -g -DDEBUG -Wall -Wextra -std=c++98 -pedantic -fpic
 LD = g++
 LDFLAGS = -nostartfiles
 SYSTEMLIBS = -lm
@@ -29,7 +29,7 @@ LIBNAME = libojcard.so
 CNAMES = init deckinfo text prng cardlist combiner blackjack poker
 PYNAMES = __init__ core text cardlist combiner
 JNAMES = Card CardList DeckType
-TESTNAMES = basic hello cardlist combiner
+TESTNAMES = basic hello cardlist combiner cpphello
 # random hello.py Hello.class
 
 LIBOBJECTS = $(patsubst %,$(BLDDIR)/%.o,$(CNAMES))
@@ -52,8 +52,9 @@ java: $(JCLASSES) $(JHEADERS)
 
 test: $(TESTPROGS)
 	cd $(BLDDIR) && ./t_basic
+	cd $(BLDDIR) && ./t_cpphello
 	cd $(BLDDIR) && ./t_cardlist
-	cd $(BLDDIR) && ./t_combiner
+	# cd $(BLDDIR) && ./t_combiner
 	# cd $(BLDDIR) && python3 ./hello.py
 	# cd $(BLDDIR) && java -ea -cp "." -Djava.library.path="." Hello
 
@@ -69,8 +70,8 @@ $(BLDDIR)/$(MODDIR):
 $(BLDDIR)/$(CLASSDIR):
 	mkdir -p $(BLDDIR)/$(CLASSDIR)
 
-#$(BLDDIR)/wrapper.o: $(SRCDIR)/library/wrapper.cc $(SRCDIR)/library/ojcardlib.h | $(BLDDIR)
-#	$(CXX) $(CXXFLAGS) -c -I$(SRCDIR)/library -o $@ $<
+$(BLDDIR)/wrapper.o: $(SRCDIR)/library/wrapper.cc $(SRCDIR)/library/ojcardlib.h | $(BLDDIR)
+	$(CXX) $(CXXFLAGS) -c -I$(SRCDIR)/library -o $@ $<
 
 $(BLDDIR)/jni%.o: $(SRCDIR)/java/$(CLASSDIR)/jni%.c $(SRCDIR)/java/com_onejoker_cardlib_%.h $(SRCDIR)/library/ojcardlib.h | $(BLDDIR)
 	$(CC) $(CFLAGS) -c -I$(JAVA_HOME)/include -I$(SRCDIR)/library -I$(SRCDIR)/java -o $@ $<
@@ -90,8 +91,8 @@ $(BLDDIR)/$(MODDIR)/%.py: $(SRCDIR)/python/$(MODDIR)/%.py | $(BLDDIR)/$(MODDIR)
 $(BLDDIR)/$(LIBNAME): $(LIBOBJECTS)
 	$(LD) $(LDFLAGS) -shared -o $@ $^ $(SYSTEMLIBS)
 
-#$(BLDDIR)/cpphello: $(TESTDIR)/cpp/hello.cc $(BLDDIR)/$(LIBNAME)
-#	$(CXX) $(CXXFLAGS) -L$(BLDDIR) -I$(SRCDIR)/library -o $@ $< -lm -lojcard
+$(BLDDIR)/t_cpphello: $(TESTDIR)/cpp/hello.cc $(BLDDIR)/$(LIBNAME)
+	$(CXX) $(CXXFLAGS) -L$(BLDDIR) -I$(SRCDIR)/library -o $@ $< -lojcard
 
 $(BLDDIR)/t_combiner: $(TESTDIR)/c/combiner.c $(TESTDIR)/c/stats.c $(BLDDIR)/$(LIBNAME)
 	$(CC) $(CFLAGS) -L$(BLDDIR) -I$(TESTDIR)/c -I$(SRCDIR)/library -o $@ $^ -lojcard -lm

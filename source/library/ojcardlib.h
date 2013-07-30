@@ -46,7 +46,7 @@ typedef enum _oj_decktype {
     OJD_SKAT = 3,
     OJD_PAN = 4,
     OJD_PANJ = 5,
-    OJD_PINOCHLE = 6,
+    OJD_PINOCHLE = 6
 } oj_decktype;
 
 typedef struct _oj_cardlist {
@@ -55,7 +55,7 @@ typedef struct _oj_cardlist {
     int_fast16_t pflags, eflags;
     uint64_t mask;
     oj_card *cards;
-    void *filler[6];
+    void *filler[4];
 } oj_cardlist;
 
 // Flag masks
@@ -196,95 +196,116 @@ extern char *ojp_hand_description(oj_poker_hand_info *, char *, int);
 #ifdef __cplusplus
 #include <vector>
 #include <string>
+
 namespace oj {
 
 class Card {
 private:
-    int mValue;
+    oj_card mV;
 
 public:
-    Card(int v) { mValue = v; }
-    Card(int r, int s) { mValue = OJ_CARD(r,s); }
-    Card(const char *s) { mValue = ojt_val(s); }
+    Card(oj_card);
+    Card(oj_rank, oj_suit);
+    Card(char *);
 
-    int value(void) { return mValue; }
-    int rank(void) { return OJ_RANK(mValue); }
-    int suit(void) { return OJ_SUIT(mValue); }
-    char *name(void) { return ojt_name(mValue); }
+    oj_card value(void);
+    oj_rank rank(void);
+    oj_suit suit(void);
+    char *name(void);
+    void fullName(std::string &);
 
-    int equals(Card c) { return mValue == c.mValue; }
-    int equals(int v) { return mValue == v; }
-    int equals(const char *s) { return mValue == ojt_val(s); }
+    int equals(Card);
+    int equals(oj_card);
+    int equals(char *);
 
-    static const char *nameOf(int c) { return ojt_name(c); }
-    static void namesOf(std::string &s, std::vector<int> v);
-    static int valueOf(const char *s) { return ojt_val(s); }
-    static void valuesOf(std::vector<int> &v, std::string s);
+    static char *nameOf(oj_card);
+    static oj_card valueOf(char *);
+    static int valuesOf(std::vector<oj_card> &, std::string);
+    static void fullNameOf(std::string &, oj_card);
+    static void namesOf(std::string &, std::vector<oj_card>);
 };
 
 
 class CardList {
 private:
-    oj_cardlist *cl;
-    int *buffer;
+    oj_cardlist *mL;
+    oj_card *mBuf;
+
+    void _init(int size) {
+        mBuf = new oj_card[size];
+        mL = new oj_cardlist;
+        ojl_new(mL, mBuf, size);
+    };
 
 public:
-    CardList(int size);
-    CardList(int size, const char *s);
+    CardList(int);
+    CardList(int, char *);
+    CardList(CardList *);
     ~CardList(void);
 
-    int truncate(int s) { return ojl_truncate(this->cl, s); }
-    int clear(void) { return ojl_clear(this->cl); }
-    int size(void) { return ojl_size(this->cl); }
+    int getPFlag(int);
+    int setPFlag(int);
 
-    int get(int i) { return ojl_get(this->cl, i); }
-    int set(int i, int c) { return ojl_set(this->cl, i, c); }
-    int set(int i, const char *s) { return ojl_set(this->cl, i, ojt_val(s)); }
-    int getPflag(int m) { return ojl_pflag(this->cl, m); }
-    int setPflag(int m) { return ojl_set_pflag(this->cl, m); }
-    uint32_t hash(void) { return ojl_hash(this->cl); }
+    oj_card get(int);
+    Card getCard(int);
+    oj_card set(int, oj_card);
+    oj_card set(int, Card);
+    oj_card set(int, char *);
 
-    int append(int c) { return ojl_append(this->cl, c); }
-    int append(Card c) { return ojl_append(this->cl, c.mValue); }
-    int append(const char *s);
-    int copy(CardList *other) { return ojl_copy(this->cl, other->cl); }
+    int size(void);
+    int clear(void);
+    int truncate(int);
 
-    int extend(CardList *src, int count) {
-        return ojl_extend(this->cl, src->cl, count);
-    }
-    int extend(Cardlist *src) {
-        return ojl_extend(this->cl, src->cl, src->cl->length);
-    }
-    int equals(Cardlist *other) { return ojl_equal(this->cl, other->cl); }
+    int equals(CardList *);
+    int equals(char *);
+    uint32_t hash(void);
 
-    int fill(int count, oj_decktype_t dt) {
-        return ojl_fill(this->cl, count, dt);
-    }
-    int fill(int count) { return ojl_fill(this->cl, count, OJD_STANDARD); }
-    int fill(oj_decktype_t dt) {
-        return ojl_fill(this->cl, this->cl->length, dt);
-    }
-    int fill(void) {
-        return ojl_fill(this->cl, this->cl->length, OJD_STANDARD);
-    }
-    int insert(int i, int c) { return ojl_insert(this->cl, i, c); }
-    int insert(int i, Card c) { return ojl_insert(this->cl, i, c.mValue); }
-    int index(int c) { return ojl_index(this->cl, c); }
+    oj_card append(oj_card);
+    oj_card append(Card);
+    oj_card append(char *);
+    oj_card pop(void);
+    Card popCard(void);
+    oj_card popRandom(void);
+    Card popRandomCard(void);
 
-    int pop(void) { return ojl_pop(this->cl); }
-    int removeIndex(int i) { return ojl_delete(this->cl, i); }
-    int removeCard(int c) { return ojl_remove(this->cl, c);
-    int removeCard(Card c) { return ojl_remove(this->cl, c.mValue);
-    int reverse(void) { return ojl_reverse(this->cl); }
-    int sort(void) { return ojl_sort(this->cl); }
-    int shuffle(void) { return ojl_shuffle(this->cl); }
+    int index(oj_card);
+    int index(Card);
+    int insert(int, oj_card);
+    int insert(int, Card);
 
-    void text(std::string &s);
+    oj_card deleteIndex(int);
+    oj_card deleteCard(oj_card);
+    oj_card deleteCard(Card);
+
+    int extend(CardList *, int);
+    int extend(CardList *);
+    int copy(CardList *);
+
+    int sort(void);
+    int reverse(void);
+
+    int fill(int, oj_decktype);
+    int fill(int);
+    int fill(oj_decktype);
+    int fill(void);
+
+    int shuffle(void);
+    int fill_shuffled(oj_decktype);
+    int fill_shuffled(void);
+
+    void text(std::string &);
+
+    static CardList newDeck(int);
 };
 
 
 class Combiner {
-
+private:
+    oj_combiner *cp;
+    oj_cardlist *deck, *hand;
+public:
+    Combiner(void) {};
+    ~Combiner(void) {};
 };
 
 

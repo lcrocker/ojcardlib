@@ -44,7 +44,7 @@ void initialize(void) {
 
 int valid_mask(oj_cardlist *p) {
     int i;
-    long long m = 0LL;
+    uint64_t m = 0LL;
 
     for (i = 0; i < uhand.length; ++i) m |= (1LL << p->cards[i]);
     return m == p->mask;
@@ -430,5 +430,7 @@ int main(int argc, char *argv[]) {
     } else {
         fprintf(stderr, "passed %d random operations.\n", count);
     }
+    (void)(argc);
+    (void)(argv); // keep -Wextra happy
     return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }

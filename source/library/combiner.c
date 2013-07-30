@@ -55,6 +55,7 @@ int ojc_new(
     assert(k >= 0 && k <= 54);
 
     if (hand->pflags & OJF_RDONLY) return OJE_RDONLY;
+    if (hand->pflags & OJF_UNIQUE) return OJE_DUPLICATE;
 
     cp->_johnnymoss = 0x10ACE0FF;
     cp->deck = deck;

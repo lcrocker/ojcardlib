@@ -36,7 +36,7 @@ static char *_ranknames[] = {
 
 // Full name of rank value (e.g. "queen")
 char *ojt_rank(oj_rank r) {
-    assert(r >= 0 && r <= 13);
+    assert(/* r >= 0 && */ r <= 13);
     return _ranknames[r];
 }
 
@@ -46,7 +46,7 @@ static char *_suitnames[] = {
 
 // Full singular name of suit value (e.g. "spade")
 char *ojt_suit(oj_suit s) {
-    assert(s >= 0 && s <= 3);
+    assert(/* s >= 0 && */ s <= 3);
     return _suitnames[s];
 }
 
