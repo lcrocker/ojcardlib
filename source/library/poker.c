@@ -282,7 +282,7 @@ static char *_ojp_hand_group_names[] = {
 };
 
 char *ojp_hand_group_name(int g) {
-    assert(g >= 0 && g <= 8);
+    assert(g >= 1 && g <= 9);
     return _ojp_hand_group_names[g];
 }
 
@@ -293,40 +293,40 @@ char *ojp_hand_description(oj_poker_hand_info *pi, char *buf, int size) {
     assert(0x10ACE0FF == pi->_johnnymoss);
 
     switch (pi->group) {
-    case 0:
+    case 1:
         if (12 == pi->ranks[0]) {
             snprintf(buf, size, "Royal Flush");
         } else {
             snprintf(buf, size, "%s-high Straight Flush", RN(0));
         }
         break;
-    case 1:
+    case 2:
         snprintf(buf, size, "Four %s%s, %s", RN(0), RNP(0), RN(1));
         break;
-    case 2:
+    case 3:
         snprintf(buf, size, "%s%s Full of %s%s", RN(0), RNP(0),
             RN(1), RNP(1));
         break;
-    case 3:
+    case 4:
         snprintf(buf, size, "Flush, %s, %s, %s, %s, %s", RN(0), RN(1),
             RN(2), RN(3), RN(4));
         break;
-    case 4:
+    case 5:
         snprintf(buf, size, "%s-high Straight", RN(0));
         break;
-    case 5:
+    case 6:
         snprintf(buf, size, "Three %s%s, %s, %s", RN(0), RNP(0),
             RN(1), RN(2));
         break;
-    case 6:
+    case 7:
         snprintf(buf, size, "Two Pair, %s%s and %s%s, %s", RN(0), RNP(0),
             RN(1), RNP(1), RN(2));
         break;
-    case 7:
+    case 8:
         snprintf(buf, size, "Pair of %s%s, %s, %s, %s", RN(0), RNP(0),
             RN(1), RN(2), RN(3));
         break;
-    case 8:
+    case 9:
         snprintf(buf, size, "No Pair, %s, %s, %s, %s, %s", RN(0), RN(1),
             RN(2), RN(3), RN(4));
         break;
