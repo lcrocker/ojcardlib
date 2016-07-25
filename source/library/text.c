@@ -69,8 +69,9 @@ char *ojt_fullname(oj_card c, char *buf, int size) {
 
 // Parse the passed-in string for a card name, returning its
 // value and a pointer to the following character.
-static oj_card _parse_card(char *str, char **next) {
-    char *cp = str, c;
+static oj_card _parse_card(const char *str, const char **next) {
+    const char *cp = str;
+	char c;
     int r, s;
     assert(0 != cp);
 
@@ -124,14 +125,14 @@ static oj_card _parse_card(char *str, char **next) {
 
 // Parse a single card value
 oj_card ojt_val(char *str) {
-    char *next;
+    const char *next;
     return _parse_card(str, &next);
 }
 
 // Fill an int array with all the cards found, returning the count
-int ojt_vals(char *str, oj_card *arr, int size) {
+int ojt_vals(const char *str, oj_card *arr, int size) {
     int v, i = 0;
-    char *next;
+    const char *next;
     assert(0 != str && 0 != arr && 0 != size);
 
     while ((v = _parse_card(str, &next))) {
