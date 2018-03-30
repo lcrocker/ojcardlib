@@ -1,4 +1,4 @@
 ojcardlib
 =========
 
-Card game library and tools. More information on [website](http://lcrocker.github.io/onejoker/cardlib).
+Card game library and tools. More information on [website](https://www.onejoker.org/).
