@@ -125,7 +125,7 @@ extern char *ojt_rank(oj_rank);
 extern char *ojt_suit(oj_suit);
 extern char *ojt_fullname(oj_card, char *, int);
 extern oj_card ojt_val(char *str);
-extern int ojt_vals(char *str, oj_card *arr, int size);
+extern int ojt_vals(const char *str, oj_card *arr, int size);
 
 // prng.c
 extern int ojr_seed(int);
@@ -208,9 +208,9 @@ public:
     Card(oj_rank, oj_suit);
     Card(char *);
 
-    oj_card value(void);
-    oj_rank rank(void);
-    oj_suit suit(void);
+    oj_card value(void) const;
+    oj_rank rank(void) const;
+    oj_suit suit(void) const;
     char *name(void);
     void fullName(std::string &);
 
@@ -220,9 +220,9 @@ public:
 
     static char *nameOf(oj_card);
     static oj_card valueOf(char *);
-    static int valuesOf(std::vector<oj_card> &, std::string);
+    static int valuesOf(std::vector<oj_card> &, std::string&);
     static void fullNameOf(std::string &, oj_card);
-    static void namesOf(std::string &, std::vector<oj_card>);
+    static void namesOf(std::string &, const std::vector<oj_card>&);
 };
 
 
@@ -239,7 +239,7 @@ private:
 
 public:
     CardList(int);
-    CardList(int, char *);
+    CardList(int, const char *);
     CardList(CardList *);
     ~CardList(void);
 
@@ -249,20 +249,20 @@ public:
     oj_card get(int);
     Card getCard(int);
     oj_card set(int, oj_card);
-    oj_card set(int, Card);
+    oj_card set(int, const Card&);
     oj_card set(int, char *);
 
     int size(void);
     int clear(void);
     int truncate(int);
 
-    int equals(CardList *);
-    int equals(char *);
+    int equals(const CardList *);
+    int equals(const char *);
     uint32_t hash(void);
 
     oj_card append(oj_card);
-    oj_card append(Card);
-    oj_card append(char *);
+    oj_card append(const Card&);
+    oj_card append(const char *);
     oj_card pop(void);
     Card popCard(void);
     oj_card popRandom(void);
@@ -271,11 +271,11 @@ public:
     int index(oj_card);
     int index(Card);
     int insert(int, oj_card);
-    int insert(int, Card);
+    int insert(int, const Card&);
 
     oj_card deleteIndex(int);
     oj_card deleteCard(oj_card);
-    oj_card deleteCard(Card);
+    oj_card deleteCard(const Card&);
 
     int extend(CardList *, int);
     int extend(CardList *);
